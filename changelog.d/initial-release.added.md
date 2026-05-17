@@ -1,1 +1,0 @@
-Initial release. Shared wizard primitives (`useWizardSteps`, `WizardProgress`, `WizardNavigation`, `WizardOptionCard`, `WizardReviewList`) and a US household draft contract with blank initial state, state-filtered county dropdown data, legacy filing-status normalization, and adapters to the PolicyEngine V1 household creation payload.

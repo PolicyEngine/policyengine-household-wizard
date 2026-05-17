@@ -1,6 +1,6 @@
 {
   "name": "policyengine-household-wizard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared wizard primitives and US household draft contract for PolicyEngine apps.",
   "type": "module",
   "main": "dist/index.cjs",
