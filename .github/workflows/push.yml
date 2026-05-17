@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: "!contains(github.event.head_commit.message, 'Release @policyengine/household-wizard')"
+    if: "!contains(github.event.head_commit.message, 'Release policyengine-household-wizard')"
 
     steps:
       - uses: actions/checkout@v6

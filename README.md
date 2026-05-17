@@ -1,4 +1,4 @@
-# @policyengine/household-wizard
+# policyengine-household-wizard
 
 Shared wizard primitives and a US household draft contract for PolicyEngine
 apps (cliff-watch, Coverage Compass, app-v2, and standalone calculators).
@@ -15,9 +15,9 @@ The package ships two surfaces:
 ## Install
 
 ```bash
-bun add @policyengine/household-wizard
+bun add policyengine-household-wizard
 # or
-npm install @policyengine/household-wizard
+npm install policyengine-household-wizard
 ```
 
 React 19 is a peer dependency.
@@ -25,7 +25,7 @@ React 19 is a peer dependency.
 If you want the default look, import the stylesheet once:
 
 ```ts
-import '@policyengine/household-wizard/styles.css';
+import 'policyengine-household-wizard/styles.css';
 ```
 
 The CSS uses ui-kit CSS variables (`--primary`, `--border`, `--accent`, …) when
@@ -48,7 +48,7 @@ import {
   US_STATES,
   getCountiesByState,
   type USHouseholdDraft,
-} from '@policyengine/household-wizard';
+} from 'policyengine-household-wizard';
 
 const steps = [
   { id: 'location', label: 'Location', isComplete: (d: USHouseholdDraft) => !!d.state },

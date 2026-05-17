@@ -1,4 +1,4 @@
-# @policyengine/household-wizard
+# policyengine-household-wizard
 
 Shared wizard primitives and US household draft contract for PolicyEngine apps.
 
