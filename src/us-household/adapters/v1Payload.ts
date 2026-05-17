@@ -1,0 +1,181 @@
+import type {
+  USHouseholdDraft,
+  USPersonDraft,
+  USPersonFlags,
+  USPersonIncomes,
+} from '../types';
+
+/**
+ * The shape of a PolicyEngine US "situation" / household-creation payload at
+ * the wire level. Variables are year-keyed; person/group keys are arbitrary
+ * strings (callers pick them).
+ */
+export type V1ValueMap = Record<string, number | string | boolean | null>;
+export type V1FieldValue = V1ValueMap | string[] | undefined;
+export type V1EntityRecord = Record<string, V1FieldValue>;
+export type V1EntityCollection = Record<string, V1EntityRecord>;
+
+export interface V1HouseholdSituation {
+  people: V1EntityCollection;
+  families?: V1EntityCollection;
+  marital_units?: V1EntityCollection;
+  tax_units?: V1EntityCollection;
+  spm_units?: V1EntityCollection;
+  households?: V1EntityCollection;
+}
+
+export interface V1HouseholdEnvelope {
+  country_id: 'us';
+  label?: string | null;
+  household_json: V1HouseholdSituation;
+}
+
+export interface ToV1PayloadOptions {
+  /**
+   * Optional override for group keys. Defaults to short, lower-case keys
+   * (`"household"`, `"tax_unit"`, etc.). Pass `"verbose"` for `"your household"`
+   * style names compatible with app-v2's builder.
+   */
+  groupKeyStyle?: 'short' | 'verbose';
+  /**
+   * If true, attaches member ids to the marital unit. Off by default because
+   * cliff-watch and other consumers send `marital_units: {}` and have it work.
+   */
+  includeMaritalUnit?: boolean;
+  /**
+   * Optional label for the envelope. Surfaces as `label` on the V1
+   * creation/metadata response.
+   */
+  label?: string | null;
+}
+
+const SHORT_KEYS = {
+  household: 'household',
+  family: 'family',
+  taxUnit: 'tax_unit',
+  spmUnit: 'spm_unit',
+  maritalUnit: 'marital_unit',
+} as const;
+
+const VERBOSE_KEYS = {
+  household: 'your household',
+  family: 'your family',
+  taxUnit: 'your tax unit',
+  spmUnit: 'your household', // app-v2 uses the same label for SPM unit
+  maritalUnit: 'your marital unit',
+} as const;
+
+const FLAG_TO_VARIABLE: Record<keyof USPersonFlags, string> = {
+  isDisabled: 'is_disabled',
+  isBlind: 'is_blind',
+  isFullTimeStudent: 'is_full_time_student',
+  isPregnant: 'is_pregnant',
+  needsCare: 'is_incapable_of_self_care',
+};
+
+const INCOME_TO_VARIABLE: Record<keyof USPersonIncomes, string> = {
+  employmentIncome: 'employment_income',
+  selfEmploymentIncome: 'self_employment_income',
+  socialSecurityIncome: 'social_security',
+  ssiAmount: 'ssi',
+  ssdiAmount: 'social_security_disability',
+  pensionIncome: 'taxable_pension_income',
+  dividendIncome: 'qualified_dividend_income',
+  taxableInterestIncome: 'taxable_interest_income',
+  rentalIncome: 'rental_income',
+  unemploymentCompensation: 'unemployment_compensation',
+  childSupportReceived: 'child_support_received',
+  miscellaneousIncome: 'miscellaneous_income',
+};
+
+function yearMap(year: string, value: number | string | boolean): V1ValueMap {
+  return { [year]: value };
+}
+
+function buildPersonVariables(person: USPersonDraft, year: string): V1EntityRecord {
+  const record: V1EntityRecord = {};
+
+  if (person.age !== null && person.age !== undefined) {
+    record.age = yearMap(year, person.age);
+  }
+
+  if (person.kind === 'dependent') {
+    record.is_tax_unit_dependent = yearMap(year, true);
+  }
+
+  for (const [draftKey, variable] of Object.entries(FLAG_TO_VARIABLE)) {
+    const value = (person as USPersonDraft)[draftKey as keyof USPersonFlags];
+    if (value !== undefined) {
+      record[variable] = yearMap(year, value);
+    }
+  }
+
+  for (const [draftKey, variable] of Object.entries(INCOME_TO_VARIABLE)) {
+    const value = (person as USPersonDraft)[draftKey as keyof USPersonIncomes];
+    if (value !== undefined && value !== null) {
+      record[variable] = yearMap(year, value);
+    }
+  }
+
+  return record;
+}
+
+export function toV1HouseholdPayload(
+  draft: USHouseholdDraft,
+  options: ToV1PayloadOptions = {},
+): V1HouseholdEnvelope {
+  const { groupKeyStyle = 'short', includeMaritalUnit = false, label = null } = options;
+  const keys = groupKeyStyle === 'verbose' ? VERBOSE_KEYS : SHORT_KEYS;
+  const year = String(draft.year);
+
+  const memberIds = draft.people.map((person) => person.id);
+
+  const people: V1EntityCollection = {};
+  for (const person of draft.people) {
+    people[person.id] = buildPersonVariables(person, year);
+  }
+
+  const householdRecord: V1EntityRecord = {
+    members: [...memberIds],
+  };
+  if (draft.state) {
+    householdRecord.state_name = yearMap(year, draft.state);
+  }
+  if (draft.county) {
+    householdRecord.county = yearMap(year, draft.county);
+  }
+
+  const families: V1EntityCollection = {
+    [keys.family]: { members: [...memberIds] },
+  };
+  const taxUnits: V1EntityCollection = {
+    [keys.taxUnit]: { members: [...memberIds] },
+  };
+  const spmUnits: V1EntityCollection = {
+    [keys.spmUnit]: { members: [...memberIds] },
+  };
+  const households: V1EntityCollection = {
+    [keys.household]: householdRecord,
+  };
+
+  const maritalUnits: V1EntityCollection = {};
+  if (includeMaritalUnit) {
+    const adults = draft.people.filter((person) => person.kind === 'adult');
+    maritalUnits[keys.maritalUnit] = {
+      members: adults.slice(0, 2).map((person) => person.id),
+    };
+  }
+
+  return {
+    country_id: 'us',
+    label,
+    household_json: {
+      people,
+      families,
+      marital_units: maritalUnits,
+      tax_units: taxUnits,
+      spm_units: spmUnits,
+      households,
+    },
+  };
+}

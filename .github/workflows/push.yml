@@ -1,0 +1,67 @@
+name: Version, Changelog, and Publish
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    name: Bump version, build changelog, publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: "!contains(github.event.head_commit.message, 'Release @policyengine/household-wizard')"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for changelog fragments
+        id: check
+        run: .github/check_fragments.sh
+
+      - name: Set up Python
+        if: steps.check.outputs.count != '0'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install towncrier
+        if: steps.check.outputs.count != '0'
+        run: pip install towncrier
+
+      - name: Bump version
+        if: steps.check.outputs.count != '0'
+        run: python .github/bump_version.py
+
+      - name: Build changelog
+        if: steps.check.outputs.count != '0'
+        run: towncrier build --yes --version "$(python -c "import json; print(json.load(open('package.json'))['version'])")"
+
+      - name: Set up Bun
+        if: steps.check.outputs.count != '0'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        if: steps.check.outputs.count != '0'
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        if: steps.check.outputs.count != '0'
+        run: bun run build
+
+      - name: Set up Node for npm publish
+        if: steps.check.outputs.count != '0'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npm
+        if: steps.check.outputs.count != '0'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit and push
+        if: steps.check.outputs.count != '0'
+        run: .github/commit_and_push.sh
