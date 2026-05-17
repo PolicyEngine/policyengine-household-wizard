@@ -24,10 +24,14 @@ export interface V1HouseholdSituation {
   households?: V1EntityCollection;
 }
 
+/**
+ * Matches policyengine-app-v2's `V1HouseholdCreateEnvelope` so `fromUSDraft`
+ * adapters can pass the envelope straight into `Household.fromV1CreationPayload`.
+ */
 export interface V1HouseholdEnvelope {
   country_id: 'us';
   label?: string | null;
-  household_json: V1HouseholdSituation;
+  data: V1HouseholdSituation;
 }
 
 export interface ToV1PayloadOptions {
@@ -169,7 +173,7 @@ export function toV1HouseholdPayload(
   return {
     country_id: 'us',
     label,
-    household_json: {
+    data: {
       people,
       families,
       marital_units: maritalUnits,
@@ -178,4 +182,16 @@ export function toV1HouseholdPayload(
       households,
     },
   };
+}
+
+/**
+ * Convenience that returns just the inner `V1HouseholdSituation` — useful for
+ * callers that POST to `/calculate` or otherwise need the situation directly
+ * without the envelope wrapper.
+ */
+export function toV1HouseholdSituation(
+  draft: USHouseholdDraft,
+  options: ToV1PayloadOptions = {},
+): V1HouseholdSituation {
+  return toV1HouseholdPayload(draft, options).data;
 }

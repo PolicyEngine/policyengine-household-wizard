@@ -14,7 +14,7 @@ describe('toV1HouseholdPayload', () => {
   it('builds a single-adult payload with state_name and one tax unit', () => {
     const envelope = toV1HouseholdPayload(singleAdult());
     expect(envelope.country_id).toBe('us');
-    const data = envelope.household_json;
+    const data = envelope.data;
 
     expect(Object.keys(data.people)).toEqual(['adult-1']);
     expect(data.people['adult-1']).toEqual({
@@ -39,7 +39,7 @@ describe('toV1HouseholdPayload', () => {
     let draft = singleAdult();
     draft = { ...draft, county: 'ALAMEDA_COUNTY_CA' };
     const envelope = toV1HouseholdPayload(draft);
-    expect(envelope.household_json.households?.household).toMatchObject({
+    expect(envelope.data.households?.household).toMatchObject({
       county: { '2026': 'ALAMEDA_COUNTY_CA' },
     });
   });
@@ -48,7 +48,7 @@ describe('toV1HouseholdPayload', () => {
     let draft = singleAdult();
     draft = addPerson(draft, 'dependent', { age: 8 });
     const envelope = toV1HouseholdPayload(draft);
-    expect(envelope.household_json.people['dependent-1']).toEqual({
+    expect(envelope.data.people['dependent-1']).toEqual({
       age: { '2026': 8 },
       is_tax_unit_dependent: { '2026': true },
     });
@@ -74,7 +74,7 @@ describe('toV1HouseholdPayload', () => {
       ),
     };
     const envelope = toV1HouseholdPayload(draft);
-    expect(envelope.household_json.people['adult-1']).toMatchObject({
+    expect(envelope.data.people['adult-1']).toMatchObject({
       is_disabled: { '2026': true },
       is_blind: { '2026': false },
       is_full_time_student: { '2026': true },
@@ -87,16 +87,16 @@ describe('toV1HouseholdPayload', () => {
 
   it('uses verbose group keys when requested', () => {
     const envelope = toV1HouseholdPayload(singleAdult(), { groupKeyStyle: 'verbose' });
-    expect(envelope.household_json.households).toHaveProperty('your household');
-    expect(envelope.household_json.tax_units).toHaveProperty('your tax unit');
-    expect(envelope.household_json.families).toHaveProperty('your family');
+    expect(envelope.data.households).toHaveProperty('your household');
+    expect(envelope.data.tax_units).toHaveProperty('your tax unit');
+    expect(envelope.data.families).toHaveProperty('your family');
   });
 
   it('omits state_name when state is null', () => {
     let draft = singleAdult();
     draft = { ...draft, state: null };
     const envelope = toV1HouseholdPayload(draft);
-    expect(envelope.household_json.households?.household.state_name).toBeUndefined();
+    expect(envelope.data.households?.household.state_name).toBeUndefined();
   });
 
   it('populates marital_units when includeMaritalUnit is true', () => {
@@ -104,7 +104,7 @@ describe('toV1HouseholdPayload', () => {
     draft.maritalStatus = 'married';
     draft = addPerson(draft, 'adult', { age: 28 });
     const envelope = toV1HouseholdPayload(draft, { includeMaritalUnit: true });
-    expect(envelope.household_json.marital_units).toEqual({
+    expect(envelope.data.marital_units).toEqual({
       marital_unit: { members: ['adult-1', 'adult-2'] },
     });
   });
