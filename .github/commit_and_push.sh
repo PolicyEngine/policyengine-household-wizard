@@ -12,5 +12,5 @@ if git diff --staged --quiet; then
   exit 0
 fi
 
-git commit -m "Release @policyengine/household-wizard"
+git commit -m "Release policyengine-household-wizard"
 git push
