@@ -44,6 +44,7 @@ export {
 
 export {
   toV1HouseholdPayload,
+  toV1HouseholdSituation,
   type V1HouseholdEnvelope,
   type V1HouseholdSituation,
   type V1ValueMap,

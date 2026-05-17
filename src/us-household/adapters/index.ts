@@ -1,5 +1,6 @@
 export {
   toV1HouseholdPayload,
+  toV1HouseholdSituation,
   type V1EntityCollection,
   type V1EntityRecord,
   type V1FieldValue,
