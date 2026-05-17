@@ -21,6 +21,25 @@ describe('normalizeLegacyDraft', () => {
     expect(draft.people[3]).toMatchObject({ kind: 'dependent', age: 4, id: 'dependent-2' });
   });
 
+  it('maps cliff-watch JOINT / SEPARATE filing status to married', () => {
+    const joint = normalizeLegacyDraft({
+      filing_status: 'JOINT',
+      state: 'CA',
+      people: [
+        { kind: 'adult', age: 30 },
+        { kind: 'adult', age: 28 },
+      ],
+    });
+    expect(joint.maritalStatus).toBe('married');
+
+    const separate = normalizeLegacyDraft({
+      filing_status: 'SEPARATE',
+      state: 'NY',
+      people: [{ kind: 'adult', age: 30 }],
+    });
+    expect(separate.maritalStatus).toBe('married');
+  });
+
   it('treats head of household as single but keeps dependents', () => {
     const draft = normalizeLegacyDraft({
       filingStatus: 'head_of_household',

@@ -44,10 +44,15 @@ export {
 
 export {
   toV1HouseholdPayload,
+  toV1HouseholdSituation,
   type V1HouseholdEnvelope,
   type V1HouseholdSituation,
   type V1ValueMap,
   type V1FieldValue,
+  type V1PersonRecord,
+  type V1GroupRecord,
+  type V1PersonCollection,
+  type V1GroupCollection,
   type V1EntityRecord,
   type V1EntityCollection,
   type ToV1PayloadOptions,

@@ -24,7 +24,12 @@ function filingStatusToMaritalStatus(value: unknown): USMaritalStatus | null {
   if (normalized === 'married_jointly' || normalized === 'married_separately') {
     return 'married';
   }
-  if (normalized === 'mfj' || normalized === 'mfs') {
+  if (
+    normalized === 'mfj' ||
+    normalized === 'mfs' ||
+    normalized === 'joint' ||
+    normalized === 'separate'
+  ) {
     return 'married';
   }
   if (
@@ -33,7 +38,8 @@ function filingStatusToMaritalStatus(value: unknown): USMaritalStatus | null {
     normalized === 'hoh' ||
     normalized === 'widowed' ||
     normalized === 'qualifying_widower' ||
-    normalized === 'qualifying_widow_widower'
+    normalized === 'qualifying_widow_widower' ||
+    normalized === 'qualifying_surviving_spouse'
   ) {
     return 'single';
   }

@@ -49,11 +49,11 @@ describe('US household fixtures', () => {
   it.each(FIXTURES)('$name: yields a valid V1 envelope', ({ draft }) => {
     const envelope = toV1HouseholdPayload(draft);
     expect(envelope.country_id).toBe('us');
-    expect(envelope.household_json.people).toBeDefined();
-    expect(Object.keys(envelope.household_json.people)).toHaveLength(draft.people.length);
-    expect(envelope.household_json.households).toBeDefined();
+    expect(envelope.data.people).toBeDefined();
+    expect(Object.keys(envelope.data.people)).toHaveLength(draft.people.length);
+    expect(envelope.data.households).toBeDefined();
     if (draft.state) {
-      const householdGroup = Object.values(envelope.household_json.households!)[0];
+      const householdGroup = Object.values(envelope.data.households!)[0];
       expect(householdGroup.state_name).toEqual({ [String(draft.year)]: draft.state });
     }
   });
