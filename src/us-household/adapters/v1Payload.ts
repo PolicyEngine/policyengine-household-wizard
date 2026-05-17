@@ -12,16 +12,32 @@ import type {
  */
 export type V1ValueMap = Record<string, number | string | boolean | null>;
 export type V1FieldValue = V1ValueMap | string[] | undefined;
-export type V1EntityRecord = Record<string, V1FieldValue>;
+
+/**
+ * A person record carries only year-keyed variable maps. `members` belongs on
+ * group records, never on people.
+ */
+export type V1PersonRecord = Record<string, V1ValueMap | undefined>;
+
+/**
+ * A group record always carries `members` plus zero-or-more year-keyed
+ * variable maps.
+ */
+export type V1GroupRecord = { members: string[] } & Record<string, V1FieldValue>;
+
+export type V1EntityRecord = V1PersonRecord | V1GroupRecord;
+export type V1PersonCollection = Record<string, V1PersonRecord>;
+export type V1GroupCollection = Record<string, V1GroupRecord>;
+/** @deprecated Prefer V1PersonCollection or V1GroupCollection. */
 export type V1EntityCollection = Record<string, V1EntityRecord>;
 
 export interface V1HouseholdSituation {
-  people: V1EntityCollection;
-  families?: V1EntityCollection;
-  marital_units?: V1EntityCollection;
-  tax_units?: V1EntityCollection;
-  spm_units?: V1EntityCollection;
-  households?: V1EntityCollection;
+  people: V1PersonCollection;
+  families?: V1GroupCollection;
+  marital_units?: V1GroupCollection;
+  tax_units?: V1GroupCollection;
+  spm_units?: V1GroupCollection;
+  households?: V1GroupCollection;
 }
 
 /**
@@ -96,8 +112,8 @@ function yearMap(year: string, value: number | string | boolean): V1ValueMap {
   return { [year]: value };
 }
 
-function buildPersonVariables(person: USPersonDraft, year: string): V1EntityRecord {
-  const record: V1EntityRecord = {};
+function buildPersonVariables(person: USPersonDraft, year: string): V1PersonRecord {
+  const record: V1PersonRecord = {};
 
   if (person.age !== null && person.age !== undefined) {
     record.age = yearMap(year, person.age);
@@ -134,12 +150,12 @@ export function toV1HouseholdPayload(
 
   const memberIds = draft.people.map((person) => person.id);
 
-  const people: V1EntityCollection = {};
+  const people: V1PersonCollection = {};
   for (const person of draft.people) {
     people[person.id] = buildPersonVariables(person, year);
   }
 
-  const householdRecord: V1EntityRecord = {
+  const householdRecord: V1GroupRecord = {
     members: [...memberIds],
   };
   if (draft.state) {
@@ -149,20 +165,20 @@ export function toV1HouseholdPayload(
     householdRecord.county = yearMap(year, draft.county);
   }
 
-  const families: V1EntityCollection = {
+  const families: V1GroupCollection = {
     [keys.family]: { members: [...memberIds] },
   };
-  const taxUnits: V1EntityCollection = {
+  const taxUnits: V1GroupCollection = {
     [keys.taxUnit]: { members: [...memberIds] },
   };
-  const spmUnits: V1EntityCollection = {
+  const spmUnits: V1GroupCollection = {
     [keys.spmUnit]: { members: [...memberIds] },
   };
-  const households: V1EntityCollection = {
+  const households: V1GroupCollection = {
     [keys.household]: householdRecord,
   };
 
-  const maritalUnits: V1EntityCollection = {};
+  const maritalUnits: V1GroupCollection = {};
   if (includeMaritalUnit) {
     const adults = draft.people.filter((person) => person.kind === 'adult');
     maritalUnits[keys.maritalUnit] = {
