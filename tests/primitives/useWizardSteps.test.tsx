@@ -10,8 +10,16 @@ interface DemoState {
 
 function makeSteps() {
   return [
-    { id: 'location', label: 'Location', isComplete: (s: DemoState) => s.location !== '' },
-    { id: 'marital', label: 'Marital', isComplete: (s: DemoState) => s.marital !== null },
+    {
+      id: 'location',
+      label: 'Location',
+      isComplete: (s: DemoState) => s.location !== '',
+    },
+    {
+      id: 'marital',
+      label: 'Marital',
+      isComplete: (s: DemoState) => s.marital !== null,
+    },
     {
       id: 'spouse',
       label: 'Spouse',
@@ -24,7 +32,9 @@ function makeSteps() {
 describe('useWizardSteps', () => {
   it('starts at the first visible step by default', () => {
     const state: DemoState = { location: '', marital: null, reviewed: false };
-    const { result } = renderHook(() => useWizardSteps({ steps: makeSteps(), state }));
+    const { result } = renderHook(() =>
+      useWizardSteps({ steps: makeSteps(), state }),
+    );
 
     expect(result.current.currentStep?.id).toBe('location');
     expect(result.current.currentStepIndex).toBe(0);
@@ -42,7 +52,11 @@ describe('useWizardSteps', () => {
   });
 
   it('falls back to the first visible step when initialStepId is hidden', () => {
-    const state: DemoState = { location: 'CA', marital: 'single', reviewed: false };
+    const state: DemoState = {
+      location: 'CA',
+      marital: 'single',
+      reviewed: false,
+    };
     const { result } = renderHook(() =>
       useWizardSteps({ steps: makeSteps(), state, initialStepId: 'spouse' }),
     );
@@ -51,14 +65,23 @@ describe('useWizardSteps', () => {
 
   it('blocks goNext when the current step is incomplete via canAdvance', () => {
     const state: DemoState = { location: '', marital: null, reviewed: false };
-    const { result } = renderHook(() => useWizardSteps({ steps: makeSteps(), state }));
+    const { result } = renderHook(() =>
+      useWizardSteps({ steps: makeSteps(), state }),
+    );
 
     expect(result.current.canAdvance).toBe(false);
+    act(() => result.current.goNext());
+    expect(result.current.currentStep?.id).toBe('location');
+    expect(result.current.validationStepId).toBe('location');
   });
 
   it('advances and steps back, notifying onStepChange', () => {
     const onStepChange = vi.fn();
-    const state: DemoState = { location: 'CA', marital: 'single', reviewed: false };
+    const state: DemoState = {
+      location: 'CA',
+      marital: 'single',
+      reviewed: false,
+    };
     const { result } = renderHook(() =>
       useWizardSteps({ steps: makeSteps(), state, onStepChange }),
     );
@@ -78,9 +101,14 @@ describe('useWizardSteps', () => {
   });
 
   it('shows the conditional step when state makes it visible', () => {
-    const initial: DemoState = { location: 'CA', marital: 'single', reviewed: false };
+    const initial: DemoState = {
+      location: 'CA',
+      marital: 'single',
+      reviewed: false,
+    };
     const { result, rerender } = renderHook(
-      ({ state }: { state: DemoState }) => useWizardSteps({ steps: makeSteps(), state }),
+      ({ state }: { state: DemoState }) =>
+        useWizardSteps({ steps: makeSteps(), state }),
       { initialProps: { state: initial } },
     );
 
@@ -96,9 +124,18 @@ describe('useWizardSteps', () => {
   });
 
   it('moves currentStepId to the first visible step when the active one disappears', () => {
-    const initial: DemoState = { location: 'CA', marital: 'married', reviewed: false };
+    const initial: DemoState = {
+      location: 'CA',
+      marital: 'married',
+      reviewed: false,
+    };
+    const renderedSteps: Array<string | undefined> = [];
     const { result, rerender } = renderHook(
-      ({ state }: { state: DemoState }) => useWizardSteps({ steps: makeSteps(), state }),
+      ({ state }: { state: DemoState }) => {
+        const wizard = useWizardSteps({ steps: makeSteps(), state });
+        renderedSteps.push(wizard.currentStep?.id);
+        return wizard;
+      },
       { initialProps: { state: initial } },
     );
 
@@ -107,11 +144,18 @@ describe('useWizardSteps', () => {
 
     rerender({ state: { ...initial, marital: 'single' } });
     expect(result.current.currentStep?.id).toBe('location');
+    expect(renderedSteps).not.toContain(undefined);
   });
 
   it('reset returns to the initial step', () => {
-    const state: DemoState = { location: 'CA', marital: 'single', reviewed: false };
-    const { result } = renderHook(() => useWizardSteps({ steps: makeSteps(), state }));
+    const state: DemoState = {
+      location: 'CA',
+      marital: 'single',
+      reviewed: false,
+    };
+    const { result } = renderHook(() =>
+      useWizardSteps({ steps: makeSteps(), state }),
+    );
 
     act(() => result.current.goNext());
     expect(result.current.currentStep?.id).toBe('marital');
@@ -120,8 +164,14 @@ describe('useWizardSteps', () => {
   });
 
   it('goToStep ignores unknown step ids', () => {
-    const state: DemoState = { location: 'CA', marital: 'single', reviewed: false };
-    const { result } = renderHook(() => useWizardSteps({ steps: makeSteps(), state }));
+    const state: DemoState = {
+      location: 'CA',
+      marital: 'single',
+      reviewed: false,
+    };
+    const { result } = renderHook(() =>
+      useWizardSteps({ steps: makeSteps(), state }),
+    );
 
     act(() => result.current.goToStep('does-not-exist'));
     expect(result.current.currentStep?.id).toBe('location');

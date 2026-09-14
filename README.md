@@ -64,7 +64,7 @@ function MyWizard() {
 }
 ```
 
-See [`docs/api.md`](docs/api.md) for the full API and [`docs/migration.md`](docs/migration.md)
+See [`docs/api.md`](docs/api.md) for wizard navigation and focus APIs and [`docs/migration.md`](docs/migration.md)
 for migrating from each app's local wizard.
 
 ## Design decisions

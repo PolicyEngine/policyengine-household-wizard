@@ -1,4 +1,6 @@
 export { useWizardSteps } from './useWizardSteps';
+export { useWizardStepFocus } from './useWizardStepFocus';
+export type { UseWizardStepFocusOptions } from './useWizardStepFocus';
 export { WizardProgress } from './WizardProgress';
 export type { WizardProgressProps } from './WizardProgress';
 export { WizardOptionCard } from './WizardOptionCard';
@@ -12,4 +14,5 @@ export type {
   UseWizardStepsOptions,
   UseWizardStepsResult,
   WizardStepConfig,
+  WizardAdvanceRequest,
 } from './types';

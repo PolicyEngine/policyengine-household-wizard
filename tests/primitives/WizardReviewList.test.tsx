@@ -14,8 +14,12 @@ describe('WizardReviewList', () => {
       />,
     );
 
-    expect(screen.getByTestId('pe-wizard-review-location')).toHaveTextContent('CA');
-    expect(screen.getByTestId('pe-wizard-review-marital')).toHaveTextContent('Married');
+    expect(screen.getByTestId('pe-wizard-review-location')).toHaveTextContent(
+      'CA',
+    );
+    expect(screen.getByTestId('pe-wizard-review-marital')).toHaveTextContent(
+      'Married',
+    );
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
@@ -25,7 +29,9 @@ describe('WizardReviewList', () => {
         items={[{ id: 'state', label: 'State', value: '', missing: true }]}
       />,
     );
-    expect(screen.getByTestId('pe-wizard-review-state')).toHaveTextContent('Missing');
+    expect(screen.getByTestId('pe-wizard-review-state')).toHaveTextContent(
+      'Missing',
+    );
   });
 
   it('renders editable items as buttons that fire onEdit', async () => {
@@ -45,9 +51,35 @@ describe('WizardReviewList', () => {
       />,
     );
 
-    const button = screen.getByRole('listitem', { name: /edit adults/i });
+    const button = screen.getByRole('button', { name: /edit adults/i });
+    expect(screen.getByRole('listitem')).toContainElement(button);
     expect(button.tagName).toBe('BUTTON');
     await user.click(button);
     expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+  it('provides the edit trigger and an explicit accessible label for rich labels', async () => {
+    let trigger: HTMLButtonElement | null = null;
+    render(
+      <WizardReviewList
+        items={[
+          {
+            id: 'household',
+            label: <span>Household</span>,
+            value: '2 adults',
+            editAriaLabel: 'Edit household details',
+            onEdit: (event) => {
+              trigger = event.currentTarget;
+            },
+          },
+        ]}
+      />,
+    );
+    const button = screen.getByRole('button', {
+      name: 'Edit household details',
+    });
+    expect(button).toHaveAccessibleDescription('2 adults');
+    button.focus();
+    await userEvent.setup().keyboard('{Enter}');
+    expect(trigger).toBe(button);
   });
 });
