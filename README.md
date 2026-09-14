@@ -114,3 +114,4 @@ echo "Describe your change." > changelog.d/your-branch.added.md
 Fragment types: `added` (minor), `changed` (patch), `fixed` (patch),
 `removed` (minor), `breaking` (major). The release workflow on `main` bumps
 the version, builds the changelog, publishes to npm, and commits the bump.
+See [release setup and verification](docs/releasing.md) for npm trusted publishing.

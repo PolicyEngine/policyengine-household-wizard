@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     if: "!contains(github.event.head_commit.message, 'Release policyengine-household-wizard')"
 
     steps:
@@ -53,14 +54,20 @@ jobs:
         if: steps.check.outputs.count != '0'
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: "24.21.0"
           registry-url: https://registry.npmjs.org
+
+      - name: Verify npm publishing toolchain
+        if: steps.check.outputs.count != '0'
+        run: |
+          node --version
+          npm --version
+          test "$(node --version)" = "v24.21.0"
+          test "$(npm --version)" = "11.19.0"
 
       - name: Publish to npm
         if: steps.check.outputs.count != '0'
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit and push
         if: steps.check.outputs.count != '0'
