@@ -157,6 +157,15 @@
   transition: border-color 0.15s ease;
 }
 
+.pe-wizard-review-listitem {
+  min-width: 0;
+}
+
+.pe-wizard-review-listitem > .pe-wizard-review-item {
+  width: 100%;
+  height: 100%;
+}
+
 .pe-wizard-review-item[role="listitem"]:not(button) {
   cursor: default;
 }
