@@ -1,0 +1,1 @@
+Add validated wizard navigation, explicit selection advancement, visited-step tracking, and question/error focus hooks. Enforce existing completion predicates in `goNext`. Move editable review rows from `role="listitem"` to native buttons inside list items; role-based selectors should target the button. Expose edit triggers and current-answer descriptions in answer summaries.
