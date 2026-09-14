@@ -12,7 +12,10 @@ the package's default component styling.
    retain raw input validation and call `goNext()` after it passes. Preserve
    country-specific validation before any number normalization.
 3. Use `goToStep(id)` for edit dialogs, validation errors, and newly required
-   follow-up questions. Only the app's progress links need a visited-step guard.
+   follow-up questions. If a state update reveals the target question, call
+   `goToStep` after that update commits, such as from an effect; a call in the
+   same event sees the previous visible-step set and ignores the hidden target.
+   Only the app's progress links need a visited-step guard.
 4. For selection questions, mark the step `autoAdvance` and create an
    `advanceRequest` in the same event as the answer update. Use the shared form
    handlers and remove local auto-advance effects.

@@ -32,6 +32,12 @@ Failed validation calls `onInvalidStep(id)`. A committed step transition calls
 step. Hidden steps do not participate in validation. A wizard with no visible
 steps cannot advance or complete.
 
+`goToStep` reads visibility from the committed render that created the handler.
+If an answer update reveals a conditional question, wait for that state to
+commit before calling `goToStep` (for example, from an effect). Calling it in
+the same event as the revealing state update ignores the still-hidden target.
+For automatic selection steps, `advanceRequest` already waits for updated state.
+
 ## Advance after a selection
 
 Mark a step `autoAdvance: true` when choosing an option completes that question.
@@ -66,7 +72,7 @@ the last request. Do not create request objects during rendering.
 The submit handler prevents native submission and advances manual steps.
 Automatic steps advance through selection requests. The key handler runs in the
 bubble phase so comboboxes can handle Enter first; it prevents an input's Enter
-from submitting the form while preserving native button activation.
+from submitting the form while preserving native `<button>` activation.
 
 ## useWizardStepFocus
 
