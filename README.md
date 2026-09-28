@@ -86,11 +86,15 @@ for migrating from each app's local wizard.
   such as `social_security` replaces the sum of its components, so components
   sent alongside it are left out of the total. `socialSecurityIncome`
   therefore sets `social_security_retirement` and `ssdiAmount` sets
-  `social_security_disability`; the model adds them. Property tests check the
+  `social_security_disability`; the model adds them. Pensions work the same
+  way: `publicPensionIncome` and `privatePensionIncome` set the components of
+  `taxable_pension_income`, which state rules read. A pension of unknown
+  source (`pensionIncome`) is sent as private, and fields that share a
+  variable are summed. Property tests check the
   adapter against a snapshot of the PolicyEngine US variable graph (refresh it
-  with `bun run regenerate-variable-graph`), and each total the adapter sets
-  directly is listed with its reason in
-  `tests/us-household/v1PayloadInvariants.test.ts`.
+  with `bun run regenerate-variable-graph`). Each total the adapter sets
+  directly, and each variable that more than one field sets, is listed with
+  its reason in `tests/us-household/v1PayloadInvariants.test.ts`.
 
 ## Repository structure
 
