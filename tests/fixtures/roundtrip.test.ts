@@ -5,6 +5,7 @@ import adultWithChild from './adult-with-child.json' with { type: 'json' };
 import disabledPerson from './disabled-person.json' with { type: 'json' };
 import student from './student.json' with { type: 'json' };
 import countyCase from './county-case.json' with { type: 'json' };
+import retireeWithSsdi from './retiree-with-ssdi.json' with { type: 'json' };
 
 import { isComplete } from '@/us-household/validate';
 import { normalizeLegacyDraft } from '@/us-household/normalize';
@@ -24,6 +25,7 @@ const FIXTURES: Fixture[] = [
   disabledPerson as Fixture,
   student as Fixture,
   countyCase as Fixture,
+  retireeWithSsdi as Fixture,
 ];
 
 describe('US household fixtures', () => {
@@ -76,6 +78,7 @@ describe('US household fixtures', () => {
         earned_income: person.employmentIncome,
         ssi_amount: person.ssiAmount,
         ssdi_amount: person.ssdiAmount,
+        social_security_annual: person.socialSecurityIncome,
       })),
       year: draft.year,
     };
@@ -92,6 +95,9 @@ describe('US household fixtures', () => {
       expect(person.isDisabled ?? false).toBe(expected.isDisabled ?? false);
       expect(person.isFullTimeStudent ?? false).toBe(expected.isFullTimeStudent ?? false);
       expect(person.employmentIncome).toBe(expected.employmentIncome);
+      expect(person.ssiAmount).toBe(expected.ssiAmount);
+      expect(person.ssdiAmount).toBe(expected.ssdiAmount);
+      expect(person.socialSecurityIncome).toBe(expected.socialSecurityIncome);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPerson, createBlankDraft } from '@/us-household/draft';
+import { addPerson, createBlankDraft, updatePerson } from '@/us-household/draft';
 import { toV1HouseholdPayload } from '@/us-household/adapters/v1Payload';
 
 function singleAdult() {
@@ -82,6 +82,26 @@ describe('toV1HouseholdPayload', () => {
       is_incapable_of_self_care: { '2026': true },
       ssi: { '2026': 600 },
       social_security_disability: { '2026': 1200 },
+    });
+  });
+
+  it('keeps SSDI when Social Security retirement benefits are also entered', () => {
+    // policyengine-us computes `social_security` as the sum of its retirement,
+    // disability, survivors, and dependents components. Sending the total as
+    // an input skips that sum, so a separately sent `social_security_disability`
+    // was left out of the total (12,000 instead of 18,000).
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: undefined,
+      socialSecurityIncome: 12000,
+      ssdiAmount: 6000,
+    });
+    const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+    expect(person).not.toHaveProperty('social_security');
+    expect(person).toEqual({
+      age: { '2026': 67 },
+      social_security_retirement: { '2026': 12000 },
+      social_security_disability: { '2026': 6000 },
     });
   });
 

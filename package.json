@@ -36,10 +36,12 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly && tsx scripts/emit-subpath-types.ts",
     "test": "vitest run",
+    "test:live": "POLICYENGINE_LIVE_API=1 vitest run tests/us-household/v1Payload.live.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "regenerate-counties": "tsx scripts/generate-counties.ts",
+    "regenerate-variable-graph": "tsx scripts/generate-variable-graph.ts",
     "prepublishOnly": "bun run build"
   },
   "sideEffects": [
@@ -57,6 +59,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "fast-check": "^4.10.2",
     "jsdom": "^25.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

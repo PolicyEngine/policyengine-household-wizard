@@ -82,6 +82,15 @@ for migrating from each app's local wizard.
 - **Adapters, not a UI shell.** Apps render their own form layouts and pass
   the draft through `validate()` and `toV1HouseholdPayload()` (or their own
   app-specific adapter) at submit time.
+- **No income field overrides another.** An input on a PolicyEngine US total
+  such as `social_security` replaces the sum of its components, so components
+  sent alongside it are left out of the total. `socialSecurityIncome`
+  therefore sets `social_security_retirement` and `ssdiAmount` sets
+  `social_security_disability`; the model adds them. Property tests check the
+  adapter against a snapshot of the PolicyEngine US variable graph (refresh it
+  with `bun run regenerate-variable-graph`), and each total the adapter sets
+  directly is listed with its reason in
+  `tests/us-household/v1PayloadInvariants.test.ts`.
 
 ## Repository structure
 
@@ -92,7 +101,7 @@ src/
     adapters/        toV1HouseholdPayload — PolicyEngine API V1 envelope
     data/            counties-by-state.json
 tests/               vitest unit and round-trip tests
-scripts/             generate-counties.ts
+scripts/             generate-counties.ts, generate-variable-graph.ts
 ```
 
 ## Development
@@ -102,6 +111,7 @@ bun install
 bun run test
 bun run typecheck
 bun run build
+bun run test:live   # adapter output against api.policyengine.org (network)
 ```
 
 Changes follow the towncrier convention used by `@policyengine/ui-kit`. Add a

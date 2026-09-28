@@ -9,6 +9,8 @@ Shared wizard primitives and US household draft contract for PolicyEngine apps.
 - Test: `bun run test`
 - Type check: `bun run typecheck`
 - Refresh county data: `bun run regenerate-counties`
+- Refresh the PolicyEngine US variable graph: `bun run regenerate-variable-graph`
+- Check the V1 payload against the live API: `bun run test:live`
 
 ## Architecture
 
@@ -55,6 +57,10 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
 - New US household field → add to `USPersonDraft`/`USHouseholdDraft` in
   `src/us-household/types.ts`, update `createBlankDraft`, `normalizeLegacyDraft`,
   `validate`, and `toV1HouseholdPayload` together. Always add a fixture in
-  `tests/us-household/fixtures/`.
+  `tests/fixtures/`. Prefer component variables to totals
+  (`social_security_retirement`, not `social_security`); a total needs a
+  reviewed entry in `tests/us-household/v1PayloadInvariants.test.ts`. Then run
+  `bun run regenerate-variable-graph` so the invariant tests see the new
+  variable.
 - New country (e.g. UK) → mirror the structure under
   `src/uk-household/` rather than mixing into `us-household/`.
