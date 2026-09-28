@@ -38,8 +38,26 @@ export interface USPersonIncomes {
   ssiAmount?: number;
   /** Social Security Disability Insurance; "social_security_disability" in PolicyEngine US. */
   ssdiAmount?: number;
-  /** "taxable_pension_income" in PolicyEngine US. */
+  /**
+   * Taxable pension income whose source the user did not give. The V1 adapter
+   * adds it to `privatePensionIncome`. Some states' rules in PolicyEngine US
+   * apply only to government pensions (for example, Arizona's public pension
+   * exclusion and Minnesota's public pension subtraction), so ask for
+   * `publicPensionIncome` when the app can. The adapter never sets the
+   * `taxable_pension_income` total: that would leave both components at zero,
+   * so neither public nor private pension rules would apply.
+   */
   pensionIncome?: number;
+  /**
+   * Taxable pension income from a government employer;
+   * "taxable_public_pension_income" in PolicyEngine US.
+   */
+  publicPensionIncome?: number;
+  /**
+   * Taxable pension income from a non-government employer;
+   * "taxable_private_pension_income" in PolicyEngine US.
+   */
+  privatePensionIncome?: number;
   /** "qualified_dividend_income" in PolicyEngine US. */
   dividendIncome?: number;
   taxableInterestIncome?: number;

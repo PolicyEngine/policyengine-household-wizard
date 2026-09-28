@@ -105,6 +105,53 @@ describe('toV1HouseholdPayload', () => {
     });
   });
 
+  it('sends pensions as their public and private components, never the total', () => {
+    // policyengine-us computes `taxable_pension_income` as the sum of its
+    // public and private components, and state rules read the components
+    // (Minnesota's public pension subtraction, Missouri's pension deductions,
+    // New York's pension exclusion). Sending the total left both at zero.
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: undefined,
+      publicPensionIncome: 20000,
+      privatePensionIncome: 10000,
+    });
+    const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+    expect(person).not.toHaveProperty('taxable_pension_income');
+    expect(person).toEqual({
+      age: { '2026': 67 },
+      taxable_public_pension_income: { '2026': 20000 },
+      taxable_private_pension_income: { '2026': 10000 },
+    });
+  });
+
+  it('sends a pension of unknown source as private pension income', () => {
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: undefined,
+      pensionIncome: 30000,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 67 },
+      taxable_private_pension_income: { '2026': 30000 },
+    });
+  });
+
+  it('adds a pension of unknown source to a private pension', () => {
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: undefined,
+      pensionIncome: 5000,
+      publicPensionIncome: 20000,
+      privatePensionIncome: 10000,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 67 },
+      taxable_public_pension_income: { '2026': 20000 },
+      taxable_private_pension_income: { '2026': 15000 },
+    });
+  });
+
   it('uses verbose group keys when requested', () => {
     const envelope = toV1HouseholdPayload(singleAdult(), { groupKeyStyle: 'verbose' });
     expect(envelope.data.households).toHaveProperty('your household');

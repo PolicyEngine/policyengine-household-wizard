@@ -44,8 +44,23 @@ const REVIEWED_TOTAL_INPUTS: Record<string, string> = {
     "policyengine-us's Simulation moves this input onto employment_income_before_lsr.",
   self_employment_income:
     "policyengine-us's Simulation moves this input onto self_employment_income_before_lsr.",
-  taxable_pension_income:
-    'No draft field sets its public or private components. State rules that read one component see zero.',
+};
+
+/**
+ * Variables that more than one draft field sets, and why. The adapter sums
+ * those fields. Mapping another field onto a variable already in use fails the
+ * tests below until it is reviewed here.
+ */
+const REVIEWED_SHARED_VARIABLES: Record<
+  string,
+  { fields: Array<keyof USPersonIncomes>; reason: string }
+> = {
+  taxable_private_pension_income: {
+    fields: ['pensionIncome', 'privatePensionIncome'],
+    reason:
+      'A pension of unknown source is sent as private. Sending the taxable_pension_income ' +
+      'total instead would leave both components at zero for the state rules that read them.',
+  },
 };
 
 const INCOME_FIELDS = Object.keys(INCOME_TO_VARIABLE) as Array<keyof USPersonIncomes>;
@@ -183,17 +198,42 @@ describe('toV1HouseholdPayload invariants', () => {
     );
   });
 
-  it('carries every entered amount into exactly one variable', () => {
+  it('maps several fields to one variable only when it is reviewed', () => {
+    const fieldsByVariable = new Map<string, string[]>();
+    for (const [field, variable] of Object.entries(INCOME_TO_VARIABLE)) {
+      fieldsByVariable.set(variable, [...(fieldsByVariable.get(variable) ?? []), field]);
+    }
+    const shared = Object.fromEntries(
+      [...fieldsByVariable]
+        .filter(([, fields]) => fields.length > 1)
+        .map(([variable, fields]) => [variable, [...fields].sort()]),
+    );
+    const reviewed = Object.fromEntries(
+      Object.entries(REVIEWED_SHARED_VARIABLES).map(([variable, { fields }]) => [
+        variable,
+        [...fields].sort(),
+      ]),
+    );
+    expect(shared).toEqual(reviewed);
+  });
+
+  it('carries every entered amount into its variable', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         for (const { person, record } of personVariables(draft)) {
-          const entered = INCOME_FIELDS.map((field) => person[field])
-            .filter((value): value is number => value !== undefined && value !== null)
-            .sort((a, b) => a - b);
-          const sent = Object.entries(record)
-            .filter(([variable]) => INCOME_VARIABLES.has(variable))
-            .map(([, byYear]) => byYear?.[String(draft.year)] as number)
-            .sort((a, b) => a - b);
+          const entered: Record<string, number> = {};
+          for (const field of INCOME_FIELDS) {
+            const value = person[field];
+            if (value !== undefined && value !== null) {
+              const variable = INCOME_TO_VARIABLE[field];
+              entered[variable] = (entered[variable] ?? 0) + value;
+            }
+          }
+          const sent = Object.fromEntries(
+            Object.entries(record)
+              .filter(([variable]) => INCOME_VARIABLES.has(variable))
+              .map(([variable, byYear]) => [variable, byYear?.[String(draft.year)]]),
+          );
           expect(sent).toEqual(entered);
         }
       }),

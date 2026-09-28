@@ -123,14 +123,6 @@
       "adds": [],
       "subtracts": []
     },
-    "taxable_pension_income": {
-      "entity": "person",
-      "adds": [
-        "taxable_private_pension_income",
-        "taxable_public_pension_income"
-      ],
-      "subtracts": []
-    },
     "taxable_private_pension_income": {
       "entity": "person",
       "adds": [],
