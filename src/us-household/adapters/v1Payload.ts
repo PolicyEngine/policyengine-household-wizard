@@ -109,6 +109,14 @@ export const FLAG_TO_VARIABLE: Readonly<Record<keyof USPersonFlags, string>> = {
  * `socialSecurityIncome` sets `social_security_retirement` and `ssdiAmount`
  * sets `social_security_disability`; the model sums them.
  *
+ * Likewise `taxable_pension_income` adds public and private pensions, and
+ * state rules read those components. `publicPensionIncome` and
+ * `privatePensionIncome` set them. A pension of unknown source
+ * (`pensionIncome`) is sent as private. Fields that share a variable are
+ * summed. Numeric strings are read as numbers and other amounts that are not
+ * finite numbers are skipped, so a bad value in one field cannot corrupt a
+ * shared sum.
+ *
  * `tests/us-household/v1PayloadInvariants.test.ts` checks this mapping against
  * the PolicyEngine US variable graph, including the few totals that are safe
  * to set directly.
@@ -119,7 +127,9 @@ export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>>
   socialSecurityIncome: 'social_security_retirement',
   ssiAmount: 'ssi',
   ssdiAmount: 'social_security_disability',
-  pensionIncome: 'taxable_pension_income',
+  pensionIncome: 'taxable_private_pension_income',
+  publicPensionIncome: 'taxable_public_pension_income',
+  privatePensionIncome: 'taxable_private_pension_income',
   dividendIncome: 'qualified_dividend_income',
   taxableInterestIncome: 'taxable_interest_income',
   rentalIncome: 'rental_income',
@@ -127,6 +137,15 @@ export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>>
   childSupportReceived: 'child_support_received',
   miscellaneousIncome: 'miscellaneous_income',
 };
+
+/**
+ * An income amount as a finite number, or `undefined` to skip it. Drafts
+ * parsed from JSON or forms can carry numeric strings, NaN, or Infinity.
+ */
+function toAmount(value: unknown): number | undefined {
+  const amount = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof amount === 'number' && Number.isFinite(amount) ? amount : undefined;
+}
 
 function yearMap(year: string, value: number | string | boolean): V1ValueMap {
   return { [year]: value };
@@ -151,9 +170,11 @@ function buildPersonVariables(person: USPersonDraft, year: string): V1PersonReco
   }
 
   for (const [draftKey, variable] of Object.entries(INCOME_TO_VARIABLE)) {
-    const value = (person as USPersonDraft)[draftKey as keyof USPersonIncomes];
-    if (value !== undefined && value !== null) {
-      record[variable] = yearMap(year, value);
+    const value = toAmount((person as USPersonDraft)[draftKey as keyof USPersonIncomes]);
+    if (value !== undefined) {
+      const sharedWith = record[variable]?.[year];
+      const total = typeof sharedWith === 'number' ? sharedWith + value : value;
+      record[variable] = yearMap(year, total);
     }
   }
 

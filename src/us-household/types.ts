@@ -16,8 +16,9 @@ export interface USPersonFlags {
 }
 
 /**
- * Annual amounts in dollars. Fields are additive: each one sets a separate
- * PolicyEngine US variable, so an amount belongs in exactly one field.
+ * Annual amounts in dollars. Fields are additive, so an amount belongs in
+ * exactly one field. Each field sets its own PolicyEngine US variable, except
+ * that `pensionIncome` and `privatePensionIncome` share one and are summed.
  */
 export interface USPersonIncomes {
   /** Wages and salaries; "employment_income" in PolicyEngine US. */
@@ -38,8 +39,29 @@ export interface USPersonIncomes {
   ssiAmount?: number;
   /** Social Security Disability Insurance; "social_security_disability" in PolicyEngine US. */
   ssdiAmount?: number;
-  /** "taxable_pension_income" in PolicyEngine US. */
+  /**
+   * Taxable pension income whose source the user did not give. The V1 adapter
+   * adds it to `privatePensionIncome`. Some states' rules in PolicyEngine US
+   * apply only to government pensions (for example, Arizona's public pension
+   * exclusion and Minnesota's public pension subtraction), so ask for
+   * `publicPensionIncome` when the app can. The adapter never sets the
+   * `taxable_pension_income` total: that would leave both components at zero,
+   * so rules that read either component would see nothing.
+   */
   pensionIncome?: number;
+  /**
+   * Taxable pension income from a government employer;
+   * "taxable_public_pension_income" in PolicyEngine US. PolicyEngine US also
+   * has a separate `taxable_federal_pension_income` input, read by West
+   * Virginia's public pension subtraction and (from 2.6.14) Indiana's civil
+   * service annuity deduction; the adapter does not set it.
+   */
+  publicPensionIncome?: number;
+  /**
+   * Taxable pension income from a non-government employer;
+   * "taxable_private_pension_income" in PolicyEngine US.
+   */
+  privatePensionIncome?: number;
   /** "qualified_dividend_income" in PolicyEngine US. */
   dividendIncome?: number;
   taxableInterestIncome?: number;
