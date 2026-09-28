@@ -331,6 +331,8 @@ describe('URL keys', () => {
       selfEmploymentIncome: 'se',
       socialSecurityIncome: 'ss',
       pensionIncome: 'pen',
+      publicPensionIncome: 'penpub',
+      privatePensionIncome: 'penpriv',
       dividendIncome: 'div',
       taxableInterestIncome: 'int',
       rentalIncome: 'rent',

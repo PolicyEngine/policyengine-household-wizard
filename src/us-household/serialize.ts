@@ -15,18 +15,20 @@ import type { USHouseholdDraft, USPersonDraft, USPersonFlags, USPersonIncomes } 
  * flag token is its key for `true` (`D`) or `-` and its key for `false` (`-D`).
  *
  * Amount keys:
- *   - `e`    = employmentIncome
- *   - `s`    = ssiAmount
- *   - `d`    = ssdiAmount
- *   - `se`   = selfEmploymentIncome
- *   - `ss`   = socialSecurityIncome
- *   - `pen`  = pensionIncome
- *   - `div`  = dividendIncome
- *   - `int`  = taxableInterestIncome
- *   - `rent` = rentalIncome
- *   - `uc`   = unemploymentCompensation
- *   - `cs`   = childSupportReceived
- *   - `misc` = miscellaneousIncome
+ *   - `e`       = employmentIncome
+ *   - `s`       = ssiAmount
+ *   - `d`       = ssdiAmount
+ *   - `se`      = selfEmploymentIncome
+ *   - `ss`      = socialSecurityIncome
+ *   - `pen`     = pensionIncome
+ *   - `penpub`  = publicPensionIncome
+ *   - `penpriv` = privatePensionIncome
+ *   - `div`     = dividendIncome
+ *   - `int`     = taxableInterestIncome
+ *   - `rent`    = rentalIncome
+ *   - `uc`      = unemploymentCompensation
+ *   - `cs`      = childSupportReceived
+ *   - `misc`    = miscellaneousIncome
  *
  * Flag keys:
  *   - `D` = isDisabled
@@ -71,6 +73,8 @@ export const INCOME_KEYS: Record<keyof Required<USPersonIncomes>, string> = {
   selfEmploymentIncome: 'se',
   socialSecurityIncome: 'ss',
   pensionIncome: 'pen',
+  publicPensionIncome: 'penpub',
+  privatePensionIncome: 'penpriv',
   dividendIncome: 'div',
   taxableInterestIncome: 'int',
   rentalIncome: 'rent',

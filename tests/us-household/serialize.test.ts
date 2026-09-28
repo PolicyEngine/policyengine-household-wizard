@@ -127,6 +127,8 @@ describe('URL format', () => {
         selfEmploymentIncome: -3200.75,
         socialSecurityIncome: 24000,
         pensionIncome: 12000,
+        publicPensionIncome: 30000,
+        privatePensionIncome: -0.5,
         dividendIncome: 850.25,
         taxableInterestIncome: 0.01,
         rentalIncome: -400,
@@ -151,7 +153,8 @@ describe('URL format', () => {
   };
   const everyFieldQuery =
     'state=NY&marital=single&year=2026&p=adult%3A67%3Ae0%3As0%3Ad14400.5%3Ase-3200.75' +
-    '%3Ass24000%3Apen12000%3Adiv850.25%3Aint0.01%3Arent-400%3Auc0%3Acs3600%3Amisc125' +
+    '%3Ass24000%3Apen12000%3Apenpub30000%3Apenpriv-0.5%3Adiv850.25%3Aint0.01' +
+    '%3Arent-400%3Auc0%3Acs3600%3Amisc125' +
     '%3AD%3A-B%3A-S%3A-P%3AC%2Cdep%3A15%3Acs0%3A-D%3AS';
 
   it('writes a pinned string for a draft with every field', () => {
