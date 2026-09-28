@@ -1,0 +1,150 @@
+{
+  "source": "https://api.policyengine.org/us/metadata",
+  "policyengineUsVersion": "1.764.6",
+  "variables": {
+    "age": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "child_support_received": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "county": {
+      "entity": "household",
+      "adds": [],
+      "subtracts": []
+    },
+    "employment_income": {
+      "entity": "person",
+      "adds": [
+        "employment_income_before_lsr",
+        "employment_income_behavioral_response"
+      ],
+      "subtracts": []
+    },
+    "employment_income_before_lsr": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "employment_income_behavioral_response": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_blind": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_disabled": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_full_time_student": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_incapable_of_self_care": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_pregnant": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "is_tax_unit_dependent": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "miscellaneous_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "qualified_dividend_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "rental_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "self_employment_income": {
+      "entity": "person",
+      "adds": [
+        "self_employment_income_before_lsr",
+        "self_employment_income_behavioral_response"
+      ],
+      "subtracts": []
+    },
+    "self_employment_income_before_lsr": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "self_employment_income_behavioral_response": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "social_security_disability": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "social_security_retirement": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "ssi": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "state_name": {
+      "entity": "household",
+      "adds": [],
+      "subtracts": []
+    },
+    "taxable_interest_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "taxable_pension_income": {
+      "entity": "person",
+      "adds": [
+        "taxable_private_pension_income",
+        "taxable_public_pension_income"
+      ],
+      "subtracts": []
+    },
+    "taxable_private_pension_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "taxable_public_pension_income": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    },
+    "unemployment_compensation": {
+      "entity": "person",
+      "adds": [],
+      "subtracts": []
+    }
+  }
+}
