@@ -36,7 +36,8 @@ import type { USHouseholdDraft, USPersonDraft, USPersonFlags, USPersonIncomes } 
  *   - `C` = needsCare
  *
  * A token's key is the longest key it starts with, so `se50` is
- * self-employment income, not SSI. Unknown tokens are ignored.
+ * self-employment income, not SSI. If a key repeats, the last token wins.
+ * Unknown tokens are ignored, and so is an amount token with a leading `-`.
  *
  * Numbers are written with `String()` and read with `parseFloat`, so every
  * finite amount or age decodes to the number that was encoded, including
@@ -44,13 +45,18 @@ import type { USHouseholdDraft, USPersonDraft, USPersonFlags, USPersonIncomes } 
  * declared types are written: finite numbers for ages and amounts, booleans
  * for flags. Anything else is treated as unset. Person ids are reassigned in
  * order (`adult-1`, `dependent-1`, …); `label` and `extras` are not encoded.
+ * Household fields work as in 0.1: empty `state`, `county` and `zip` are not
+ * written, a `marital` other than `single` or `married` reads as unset, and
+ * `year` is read with `parseInt`, so only whole years round-trip.
  *
  * Compatibility:
  *   - Keys never change meaning. A new field gets a new key made of ASCII
  *     letters, lowercase for amounts, that does not start with a flag letter.
  *   - Version 0.1 wrote only `e`, `s`, `d` and `true` flags, and skipped zero
  *     amounts. Its links decode as before, except that fractions and exponents
- *     are kept: 0.1 read `e50000.75` as 50000.
+ *     are kept: 0.1 read `e50000.75` as 50000. The one other difference comes
+ *     from values outside the types: 0.1 wrote a string amount as is, so
+ *     `ssiAmount: 'e5'` became `se5`, which now reads as self-employment income.
  *   - A 0.1 decoder reads the first letter of each token and ignores every
  *     token added since: none starts with a flag letter, and in `se`, `ss`
  *     and `div` a letter, not a number, follows the amount key. So 0.1 still

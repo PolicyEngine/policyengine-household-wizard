@@ -2,9 +2,9 @@
  * Frozen copy of `src/us-household/serialize.ts` as published in
  * policyengine-household-wizard 0.1.0 (`package/src/us-household/serialize.ts`
  * in the npm tarball, sha256
- * 7dc823d23b81d5e9d66b115894ab2f38898b7715945bae50333d5bf60f881876). Only the
- * import path differs. Compatibility tests compare the current codec with it;
- * do not edit it.
+ * 7dc823d23b81d5e9d66b115894ab2f38898b7715945bae50333d5bf60f881876). Apart
+ * from this comment, only the two import paths differ. Compatibility tests
+ * compare the current codec with it; do not edit it.
  */
 import { createBlankDraft } from '@/us-household/draft';
 import type { USHouseholdDraft, USPersonDraft } from '@/us-household/types';

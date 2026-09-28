@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addPerson, createBlankDraft } from '@/us-household/draft';
-import { deserializeDraft, serializeDraft } from '@/us-household/serialize';
+import { INCOME_KEYS, deserializeDraft, serializeDraft } from '@/us-household/serialize';
 import type { USHouseholdDraft } from '@/us-household/types';
 import {
   deserializeDraft as deserializeDraft010,
@@ -67,6 +67,37 @@ describe('serialize / deserialize round-trip', () => {
     const draft = deserializeDraft('state=CA&p=adult:30:Z9999');
     expect(draft.people).toHaveLength(1);
     expect(draft.people[0]).toMatchObject({ kind: 'adult', age: 30 });
+  });
+
+  const amountKeys = Object.entries(INCOME_KEYS).map(([field, key]) => ({ field, key }));
+
+  it.each(amountKeys)('ignores `-$key` amount tokens', ({ field, key }) => {
+    expect(deserializeDraft(`p=adult:30:-${key}7`).people[0]).toStrictEqual({
+      id: 'adult-1',
+      kind: 'adult',
+      age: 30,
+    });
+    expect(deserializeDraft(`p=adult:30:${key}50:-${key}7`).people[0]).toStrictEqual({
+      id: 'adult-1',
+      kind: 'adult',
+      age: 30,
+      [field]: 50,
+    });
+  });
+
+  it('lets the last token win when a key repeats', () => {
+    expect(deserializeDraft('p=adult:30:D:-D').people[0].isDisabled).toBe(false);
+    expect(deserializeDraft('p=adult:30:-D:D').people[0].isDisabled).toBe(true);
+    expect(deserializeDraft('p=adult:30:se5:se-7').people[0].selfEmploymentIncome).toBe(-7);
+  });
+
+  it('reads the second field as the age, never as a token', () => {
+    expect(deserializeDraft('p=adult:e50000:D').people[0]).toStrictEqual({
+      id: 'adult-1',
+      kind: 'adult',
+      age: null,
+      isDisabled: true,
+    });
   });
 });
 
@@ -181,6 +212,22 @@ describe('links written by 0.1.0', () => {
 
   it('still writes the same link for that draft', () => {
     expect(serializeDraft(draft010)).toBe(link010);
+  });
+
+  it('reads a string amount 0.1.0 wrote as is under the key it now spells', () => {
+    // Outside the declared types, so disclosed rather than prevented:
+    // `s` + 'e5' is `se5`, self-employment income since this version.
+    const draft = { ...createBlankDraft(2026), people: [] } as USHouseholdDraft;
+    draft.people.push({ id: 'a', kind: 'adult', age: 30, ssiAmount: 'e5' as unknown as number });
+    const link = serializeDraft010(draft);
+    expect(new URLSearchParams(link).get('p')).toBe('adult:30:se5');
+    expect(deserializeDraft010(link).people[0]).toStrictEqual({ id: 'adult-1', kind: 'adult', age: 30 });
+    expect(deserializeDraft(link).people[0]).toStrictEqual({
+      id: 'adult-1',
+      kind: 'adult',
+      age: 30,
+      selfEmploymentIncome: 5,
+    });
   });
 
   it('keeps the cents and exponents that 0.1.0 dropped', () => {

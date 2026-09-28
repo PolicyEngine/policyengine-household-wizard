@@ -25,11 +25,15 @@ import {
  * 1. Round trip: decoding an encoded draft returns every person field (kind,
  *    age, flags, amounts) and every household field. Ids are reassigned in
  *    order, `label` and `extras` are dropped, -0 reads as 0, and values outside
- *    the declared types read as unset.
+ *    the declared types read as unset. Household fields keep their 0.1 rules:
+ *    empty `state`, `county` and `zip` read as unset, and the generator uses
+ *    whole years and valid marital statuses, the only ones the format carries.
  * 2. Canonical form: re-encoding a decoded link gives the same string.
  * 3. Purity: encoding is deterministic and leaves the draft unchanged.
  * 4. 0.1 links: a link written by 0.1.0 decodes to what it carries, and any
- *    string of 0.1 tokens with whole numbers decodes exactly as in 0.1.0.
+ *    string of 0.1 tokens with whole numbers decodes exactly as in 0.1.0. A
+ *    0.1.0 string amount that spells a newer key is the one disclosed
+ *    exception, pinned in serialize.test.ts.
  * 5. Newer links in 0.1.0: the 0.1.0 decoder reads a current link as it read
  *    the 0.1.0 link for the same draft, plus explicit zero amounts.
  * 6. Same bytes: for drafts 0.1 could express, the current encoder writes the
@@ -254,10 +258,11 @@ describe('serializeDraft / deserializeDraft invariants', () => {
 
   it('4b. decodes any string of 0.1 tokens with whole numbers exactly as 0.1.0 did', () => {
     // Hand-edited links included: junk letters, unknown keys, empty fields,
-    // repeated keys, and numbers after flag letters.
+    // repeated keys, numbers after flag letters, `-` before amount keys, and
+    // tokens in the age slot.
     const tokenArb = fc
       .tuple(
-        fc.constantFrom(...KEYS_010, 'x', 'E', 'Z', ''),
+        fc.constantFrom(...KEYS_010, '-e', '-s', '-d', 'x', 'E', 'Z', ''),
         fc.oneof(fc.constant(''), fc.integer().map(String)),
         fc.stringMatching(/^[A-Za-z]{0,3}$/),
       )
@@ -266,7 +271,12 @@ describe('serializeDraft / deserializeDraft invariants', () => {
     const personArb = fc
       .tuple(
         fc.constantFrom('adult', 'dep', 'child', ''),
-        fc.oneof(fc.constant(''), fc.integer().map(String), fc.stringMatching(/^\d{1,3}[a-z]{0,2}$/)),
+        fc.oneof(
+          fc.constant(''),
+          fc.integer().map(String),
+          fc.stringMatching(/^\d{1,3}[a-z]{0,2}$/),
+          tokenArb,
+        ),
         fc.array(tokenArb, { maxLength: 6 }),
       )
       .map(([kind, age, tokens]) => [kind, age, ...tokens].join(':'));
