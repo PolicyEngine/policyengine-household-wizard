@@ -90,6 +90,43 @@ describe('normalizeLegacyDraft', () => {
     });
   });
 
+  it('keeps a legacy pension of unknown source out of the public and private fields', () => {
+    const draft = normalizeLegacyDraft({
+      state: 'NY',
+      marital_status: 'MARRIED',
+      people: [
+        { kind: 'adult', age: 68, pension_income_annual: '24000' },
+        { kind: 'adult', age: 66, public_pension_income_annual: 9000, privatePensionIncome: 4000 },
+      ],
+    });
+    const camel = normalizeLegacyDraft({
+      state: 'NY',
+      marital_status: 'UNMARRIED',
+      people: [
+        {
+          kind: 'adult',
+          age: 70,
+          pensionIncome: 1000,
+          publicPensionIncome: 2000,
+          private_pension_income_annual: 3000,
+        },
+      ],
+    });
+    expect(camel.people[0]).toMatchObject({
+      pensionIncome: 1000,
+      publicPensionIncome: 2000,
+      privatePensionIncome: 3000,
+    });
+    expect(draft.people[0].pensionIncome).toBe(24000);
+    expect(draft.people[0].publicPensionIncome).toBeUndefined();
+    expect(draft.people[0].privatePensionIncome).toBeUndefined();
+    expect(draft.people[1].pensionIncome).toBeUndefined();
+    expect(draft.people[1]).toMatchObject({
+      publicPensionIncome: 9000,
+      privatePensionIncome: 4000,
+    });
+  });
+
   it('resolves a free-text county to its enum code', () => {
     const draft = normalizeLegacyDraft({
       state: 'CA',

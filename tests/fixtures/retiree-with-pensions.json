@@ -1,0 +1,26 @@
+{
+  "name": "married retirees with public, private, and unknown-source pensions in NY",
+  "draft": {
+    "state": "NY",
+    "county": null,
+    "zip": null,
+    "maritalStatus": "married",
+    "year": 2026,
+    "people": [
+      {
+        "id": "adult-1",
+        "kind": "adult",
+        "age": 68,
+        "publicPensionIncome": 24000,
+        "socialSecurityIncome": 18000
+      },
+      {
+        "id": "adult-2",
+        "kind": "adult",
+        "age": 66,
+        "privatePensionIncome": 12000,
+        "pensionIncome": 3000
+      }
+    ]
+  }
+}
