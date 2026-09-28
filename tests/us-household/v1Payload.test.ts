@@ -152,6 +152,22 @@ describe('toV1HouseholdPayload', () => {
     });
   });
 
+  it('skips an amount that is not a finite number instead of summing it', () => {
+    // Summing would turn NaN + 12000 into NaN, which JSON sends as null, and
+    // the valid private pension would be lost.
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: Number.NaN,
+      pensionIncome: Number.NaN,
+      privatePensionIncome: 12000,
+      publicPensionIncome: Infinity,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 67 },
+      taxable_private_pension_income: { '2026': 12000 },
+    });
+  });
+
   it('uses verbose group keys when requested', () => {
     const envelope = toV1HouseholdPayload(singleAdult(), { groupKeyStyle: 'verbose' });
     expect(envelope.data.households).toHaveProperty('your household');

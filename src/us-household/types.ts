@@ -16,8 +16,9 @@ export interface USPersonFlags {
 }
 
 /**
- * Annual amounts in dollars. Fields are additive: each one sets a separate
- * PolicyEngine US variable, so an amount belongs in exactly one field.
+ * Annual amounts in dollars. Fields are additive, so an amount belongs in
+ * exactly one field. Each field sets its own PolicyEngine US variable, except
+ * that `pensionIncome` and `privatePensionIncome` share one and are summed.
  */
 export interface USPersonIncomes {
   /** Wages and salaries; "employment_income" in PolicyEngine US. */
@@ -50,7 +51,10 @@ export interface USPersonIncomes {
   pensionIncome?: number;
   /**
    * Taxable pension income from a government employer;
-   * "taxable_public_pension_income" in PolicyEngine US.
+   * "taxable_public_pension_income" in PolicyEngine US. PolicyEngine US also
+   * has a separate `taxable_federal_pension_income` input, read by West
+   * Virginia's public pension subtraction and (in 2.x) Indiana's civil service
+   * annuity deduction; the adapter does not set it.
    */
   publicPensionIncome?: number;
   /**

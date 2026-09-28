@@ -73,6 +73,7 @@ interface LegacyPerson {
   publicPensionIncome?: number;
   public_pension_income_annual?: number;
   privatePensionIncome?: number;
+  private_pension_income_annual?: number;
 }
 
 interface LegacyDraftShape {
@@ -147,13 +148,17 @@ function normalizePerson(
     // `socialSecurityIncome` excludes SSDI; a legacy total that includes it
     // would count SSDI twice next to `ssdiAmount`.
     socialSecurityIncome: coerceNumber(legacy.social_security_annual),
-    // Legacy pension amounts carry no source, so they stay in the
-    // unknown-source field rather than being guessed as public or private.
+    // A legacy pension with no source stays in the unknown-source field
+    // rather than being guessed as public or private. The three fields are
+    // disjoint: a legacy total that already includes the public or private
+    // amount would count it twice.
     pensionIncome: coerceNumber(legacy.pensionIncome ?? legacy.pension_income_annual),
     publicPensionIncome: coerceNumber(
       legacy.publicPensionIncome ?? legacy.public_pension_income_annual,
     ),
-    privatePensionIncome: coerceNumber(legacy.privatePensionIncome),
+    privatePensionIncome: coerceNumber(
+      legacy.privatePensionIncome ?? legacy.private_pension_income_annual,
+    ),
   };
 }
 

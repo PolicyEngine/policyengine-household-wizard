@@ -91,11 +91,12 @@ function isTotal(variable: string): boolean {
   return node.adds.length > 0 || node.subtracts.length > 0;
 }
 
-// Amounts may be absent, null (drafts parsed from JSON), zero, or negative
-// (self-employment losses).
+// Amounts may be absent, null (drafts parsed from JSON), zero, negative
+// (self-employment losses), or not finite (a form that parsed bad input).
 const amountArb = fc.oneof(
   { weight: 3, arbitrary: fc.constant(undefined) },
   { weight: 1, arbitrary: fc.constant(null) },
+  { weight: 1, arbitrary: fc.constantFrom(Number.NaN, Infinity, -Infinity) },
   { weight: 6, arbitrary: fc.integer({ min: -100_000, max: 5_000_000 }) },
 );
 
@@ -217,14 +218,14 @@ describe('toV1HouseholdPayload invariants', () => {
     expect(shared).toEqual(reviewed);
   });
 
-  it('carries every entered amount into its variable', () => {
+  it('carries every finite entered amount into its variable', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         for (const { person, record } of personVariables(draft)) {
           const entered: Record<string, number> = {};
           for (const field of INCOME_FIELDS) {
             const value = person[field];
-            if (value !== undefined && value !== null) {
+            if (typeof value === 'number' && Number.isFinite(value)) {
               const variable = INCOME_TO_VARIABLE[field];
               entered[variable] = (entered[variable] ?? 0) + value;
             }

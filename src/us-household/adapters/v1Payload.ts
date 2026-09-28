@@ -113,7 +113,8 @@ export const FLAG_TO_VARIABLE: Readonly<Record<keyof USPersonFlags, string>> = {
  * state rules read those components. `publicPensionIncome` and
  * `privatePensionIncome` set them. A pension of unknown source
  * (`pensionIncome`) is sent as private. Fields that share a variable are
- * summed.
+ * summed. Amounts that are not finite numbers are skipped, so a bad value in
+ * one field cannot turn a shared sum into NaN.
  *
  * `tests/us-household/v1PayloadInvariants.test.ts` checks this mapping against
  * the PolicyEngine US variable graph, including the few totals that are safe
@@ -160,7 +161,7 @@ function buildPersonVariables(person: USPersonDraft, year: string): V1PersonReco
 
   for (const [draftKey, variable] of Object.entries(INCOME_TO_VARIABLE)) {
     const value = (person as USPersonDraft)[draftKey as keyof USPersonIncomes];
-    if (value !== undefined && value !== null) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
       const sharedWith = record[variable]?.[year];
       const total = typeof sharedWith === 'number' ? sharedWith + value : value;
       record[variable] = yearMap(year, total);
