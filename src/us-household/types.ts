@@ -15,14 +15,32 @@ export interface USPersonFlags {
   needsCare?: boolean;
 }
 
+/**
+ * Annual amounts in dollars. Fields are additive: each one sets a separate
+ * PolicyEngine US variable, so an amount belongs in exactly one field.
+ */
 export interface USPersonIncomes {
   /** Wages and salaries; "employment_income" in PolicyEngine US. */
   employmentIncome?: number;
+  /** "self_employment_income" in PolicyEngine US. */
   selfEmploymentIncome?: number;
+  /**
+   * Social Security retirement benefits; "social_security_retirement" in
+   * PolicyEngine US. Put SSDI in `ssdiAmount`, not here: the model adds the two
+   * to get total Social Security. Survivors or dependents benefits entered here
+   * count as retirement benefits.
+   */
   socialSecurityIncome?: number;
+  /**
+   * Reported Supplemental Security Income; "ssi" in PolicyEngine US. Setting it
+   * replaces the model's own SSI calculation.
+   */
   ssiAmount?: number;
+  /** Social Security Disability Insurance; "social_security_disability" in PolicyEngine US. */
   ssdiAmount?: number;
+  /** "taxable_pension_income" in PolicyEngine US. */
   pensionIncome?: number;
+  /** "qualified_dividend_income" in PolicyEngine US. */
   dividendIncome?: number;
   taxableInterestIncome?: number;
   rentalIncome?: number;

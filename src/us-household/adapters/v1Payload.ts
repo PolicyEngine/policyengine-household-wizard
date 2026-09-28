@@ -85,7 +85,11 @@ const VERBOSE_KEYS = {
   maritalUnit: 'your marital unit',
 } as const;
 
-const FLAG_TO_VARIABLE: Record<keyof USPersonFlags, string> = {
+/**
+ * Person flags and the PolicyEngine US variables they set. Exported for tests
+ * and tooling; not part of the package entry points.
+ */
+export const FLAG_TO_VARIABLE: Readonly<Record<keyof USPersonFlags, string>> = {
   isDisabled: 'is_disabled',
   isBlind: 'is_blind',
   isFullTimeStudent: 'is_full_time_student',
@@ -93,10 +97,25 @@ const FLAG_TO_VARIABLE: Record<keyof USPersonFlags, string> = {
   needsCare: 'is_incapable_of_self_care',
 };
 
-const INCOME_TO_VARIABLE: Record<keyof USPersonIncomes, string> = {
+/**
+ * Person income fields and the PolicyEngine US variables they set. Exported
+ * for tests and tooling; not part of the package entry points.
+ *
+ * Where PolicyEngine US defines a variable as the sum of components (`adds`),
+ * an input on the total replaces that sum: components sent alongside it are
+ * ignored, and rules that read a component see zero. `social_security` adds
+ * retirement, disability, survivors, and dependents benefits, so
+ * `socialSecurityIncome` sets `social_security_retirement` and `ssdiAmount`
+ * sets `social_security_disability`; the model sums them.
+ *
+ * `tests/us-household/v1PayloadInvariants.test.ts` checks this mapping against
+ * the PolicyEngine US variable graph, including the few totals that are safe
+ * to set directly.
+ */
+export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>> = {
   employmentIncome: 'employment_income',
   selfEmploymentIncome: 'self_employment_income',
-  socialSecurityIncome: 'social_security',
+  socialSecurityIncome: 'social_security_retirement',
   ssiAmount: 'ssi',
   ssdiAmount: 'social_security_disability',
   pensionIncome: 'taxable_pension_income',
