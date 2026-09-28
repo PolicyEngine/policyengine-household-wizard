@@ -168,6 +168,21 @@ describe('toV1HouseholdPayload', () => {
     });
   });
 
+  it('reads a numeric string as a number instead of concatenating it', () => {
+    // Without conversion, 5000 + '12000' concatenated to '500012000'.
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      age: 67,
+      employmentIncome: undefined,
+      pensionIncome: 5000,
+      privatePensionIncome: '12000' as unknown as number,
+      publicPensionIncome: ' ' as unknown as number,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 67 },
+      taxable_private_pension_income: { '2026': 17000 },
+    });
+  });
+
   it('uses verbose group keys when requested', () => {
     const envelope = toV1HouseholdPayload(singleAdult(), { groupKeyStyle: 'verbose' });
     expect(envelope.data.households).toHaveProperty('your household');

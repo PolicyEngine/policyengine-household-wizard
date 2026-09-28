@@ -46,15 +46,15 @@ export interface USPersonIncomes {
    * exclusion and Minnesota's public pension subtraction), so ask for
    * `publicPensionIncome` when the app can. The adapter never sets the
    * `taxable_pension_income` total: that would leave both components at zero,
-   * so neither public nor private pension rules would apply.
+   * so rules that read either component would see nothing.
    */
   pensionIncome?: number;
   /**
    * Taxable pension income from a government employer;
    * "taxable_public_pension_income" in PolicyEngine US. PolicyEngine US also
    * has a separate `taxable_federal_pension_income` input, read by West
-   * Virginia's public pension subtraction and (in 2.x) Indiana's civil service
-   * annuity deduction; the adapter does not set it.
+   * Virginia's public pension subtraction and (from 2.6.14) Indiana's civil
+   * service annuity deduction; the adapter does not set it.
    */
   publicPensionIncome?: number;
   /**
