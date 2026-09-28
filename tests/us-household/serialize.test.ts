@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addPerson, createBlankDraft, updatePerson } from '@/us-household/draft';
+import { addPerson, createBlankDraft } from '@/us-household/draft';
 import { deserializeDraft, serializeDraft } from '@/us-household/serialize';
+import type { USHouseholdDraft } from '@/us-household/types';
+import {
+  deserializeDraft as deserializeDraft010,
+  serializeDraft as serializeDraft010,
+} from './legacy/serialize-0.1.0';
 
 describe('serialize / deserialize round-trip', () => {
   it('preserves state, county, marital status, year, and people', () => {
@@ -35,14 +40,21 @@ describe('serialize / deserialize round-trip', () => {
     });
   });
 
-  it('omits zero or unset income fields from the serialization', () => {
+  it('writes explicit zero amounts and false flags, and omits unset fields', () => {
     let draft = createBlankDraft(2026);
     draft.state = 'CA';
     draft.maritalStatus = 'single';
-    draft = addPerson(draft, 'adult', { age: 30, employmentIncome: 0 });
+    draft = addPerson(draft, 'adult', { age: 30, employmentIncome: 0, isDisabled: false });
+    draft = addPerson(draft, 'dependent', { age: 4 });
     const query = serializeDraft(draft);
-    expect(query).not.toContain('e0'); // no zero income token
-    expect(query).toContain('p=adult%3A30');
+    expect(new URLSearchParams(query).get('p')).toBe('adult:30:e0:-D,dep:4');
+    expect(deserializeDraft(query).people[0]).toStrictEqual({
+      id: 'adult-1',
+      kind: 'adult',
+      age: 30,
+      employmentIncome: 0,
+      isDisabled: false,
+    });
   });
 
   it('handles missing query gracefully', () => {
@@ -55,5 +67,134 @@ describe('serialize / deserialize round-trip', () => {
     const draft = deserializeDraft('state=CA&p=adult:30:Z9999');
     expect(draft.people).toHaveLength(1);
     expect(draft.people[0]).toMatchObject({ kind: 'adult', age: 30 });
+  });
+});
+
+describe('URL format', () => {
+  // Every field, with zeros, losses, cents and false flags.
+  const everyField: USHouseholdDraft = {
+    state: 'NY',
+    county: null,
+    zip: null,
+    maritalStatus: 'single',
+    year: 2026,
+    people: [
+      {
+        id: 'adult-1',
+        kind: 'adult',
+        age: 67,
+        employmentIncome: 0,
+        ssiAmount: 0,
+        ssdiAmount: 14400.5,
+        selfEmploymentIncome: -3200.75,
+        socialSecurityIncome: 24000,
+        pensionIncome: 12000,
+        dividendIncome: 850.25,
+        taxableInterestIncome: 0.01,
+        rentalIncome: -400,
+        unemploymentCompensation: 0,
+        childSupportReceived: 3600,
+        miscellaneousIncome: 125,
+        isDisabled: true,
+        isBlind: false,
+        isFullTimeStudent: false,
+        isPregnant: false,
+        needsCare: true,
+      },
+      {
+        id: 'dependent-1',
+        kind: 'dependent',
+        age: 15,
+        childSupportReceived: 0,
+        isDisabled: false,
+        isFullTimeStudent: true,
+      },
+    ],
+  };
+  const everyFieldQuery =
+    'state=NY&marital=single&year=2026&p=adult%3A67%3Ae0%3As0%3Ad14400.5%3Ase-3200.75' +
+    '%3Ass24000%3Apen12000%3Adiv850.25%3Aint0.01%3Arent-400%3Auc0%3Acs3600%3Amisc125' +
+    '%3AD%3A-B%3A-S%3A-P%3AC%2Cdep%3A15%3Acs0%3A-D%3AS';
+
+  it('writes a pinned string for a draft with every field', () => {
+    expect(serializeDraft(everyField)).toBe(everyFieldQuery);
+  });
+
+  it('reads the pinned string back to the same draft', () => {
+    expect(deserializeDraft(everyFieldQuery)).toStrictEqual(everyField);
+  });
+
+  it('reads the example in the serialize.ts header', () => {
+    const draft = deserializeDraft(
+      'state=CA&county=ALAMEDA_COUNTY_CA&marital=married&year=2026' +
+        '&p=adult:35:e50000:se-1200.5,adult:33:e20000:-D,dep:6:S',
+    );
+    expect(draft.people).toStrictEqual([
+      { id: 'adult-1', kind: 'adult', age: 35, employmentIncome: 50000, selfEmploymentIncome: -1200.5 },
+      { id: 'adult-2', kind: 'adult', age: 33, employmentIncome: 20000, isDisabled: false },
+      { id: 'dependent-1', kind: 'dependent', age: 6, isFullTimeStudent: true },
+    ]);
+  });
+});
+
+describe('links written by 0.1.0', () => {
+  // Every field 0.1.0 wrote: e, s, d (including a loss), every flag, an unset age.
+  const draft010: USHouseholdDraft = {
+    state: 'CA',
+    county: 'ALAMEDA_COUNTY_CA',
+    zip: '94703',
+    maritalStatus: 'married',
+    year: 2026,
+    people: [
+      {
+        id: 'adult-1',
+        kind: 'adult',
+        age: 35,
+        employmentIncome: 50000,
+        ssiAmount: 9432,
+        ssdiAmount: 18000,
+        isDisabled: true,
+        isBlind: true,
+      },
+      { id: 'adult-2', kind: 'adult', age: 33, employmentIncome: -1500, isPregnant: true },
+      { id: 'dependent-1', kind: 'dependent', age: 6, isFullTimeStudent: true, needsCare: true },
+      { id: 'dependent-2', kind: 'dependent', age: null },
+    ],
+  };
+  const link010 =
+    'state=CA&county=ALAMEDA_COUNTY_CA&zip=94703&marital=married&year=2026' +
+    '&p=adult%3A35%3Ae50000%3As9432%3Ad18000%3AD%3AB%2Cadult%3A33%3Ae-1500%3AP' +
+    '%2Cdep%3A6%3AS%3AC%2Cdep%3A';
+
+  it('pins the link 0.1.0 wrote', () => {
+    expect(serializeDraft010(draft010)).toBe(link010);
+  });
+
+  it('decodes it to the same draft as 0.1.0', () => {
+    expect(deserializeDraft(link010)).toStrictEqual(draft010);
+    expect(deserializeDraft(link010)).toStrictEqual(deserializeDraft010(link010));
+  });
+
+  it('decodes it with unescaped separators', () => {
+    expect(deserializeDraft(decodeURIComponent(link010))).toStrictEqual(draft010);
+  });
+
+  it('still writes the same link for that draft', () => {
+    expect(serializeDraft(draft010)).toBe(link010);
+  });
+
+  it('keeps the cents and exponents that 0.1.0 dropped', () => {
+    // `%2B` is the `+` of `1e+21`; a bare `+` in a query string reads as a space.
+    const link = 'p=adult:30:e50000.75:s1e%2B21:d5e-7';
+    expect(deserializeDraft010(link).people[0]).toMatchObject({
+      employmentIncome: 50000,
+      ssiAmount: 1,
+      ssdiAmount: 5,
+    });
+    expect(deserializeDraft(link).people[0]).toMatchObject({
+      employmentIncome: 50000.75,
+      ssiAmount: 1e21,
+      ssdiAmount: 5e-7,
+    });
   });
 });

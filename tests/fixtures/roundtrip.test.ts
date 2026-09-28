@@ -32,18 +32,7 @@ describe('US household fixtures', () => {
   });
 
   it.each(FIXTURES)('$name: round-trips through URL serialization', ({ draft }) => {
-    const round = deserializeDraft(serializeDraft(draft));
-    expect(round.state).toBe(draft.state);
-    expect(round.county).toBe(draft.county);
-    expect(round.maritalStatus).toBe(draft.maritalStatus);
-    expect(round.year).toBe(draft.year);
-    expect(round.people).toHaveLength(draft.people.length);
-    draft.people.forEach((person, index) => {
-      expect(round.people[index]).toMatchObject({
-        kind: person.kind,
-        age: person.age,
-      });
-    });
+    expect(deserializeDraft(serializeDraft(draft))).toStrictEqual(draft);
   });
 
   it.each(FIXTURES)('$name: yields a valid V1 envelope', ({ draft }) => {

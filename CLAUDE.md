@@ -33,6 +33,11 @@ Shared wizard primitives and US household draft contract for PolicyEngine apps.
   `state_name`, `is_disabled`, etc. — but **camelCase** in `USPersonDraft`
   (`employmentIncome`, `isDisabled`). The adapter is the only place these
   cross.
+- **URL keys are permanent** — a key in `src/us-household/serialize.ts` never
+  changes meaning. A new field gets a new key: ASCII letters, lowercase for
+  amounts, not starting with a flag letter, so 0.1 decoders ignore it.
+  `tests/us-household/serializeInvariants.test.ts` checks the codec against
+  the frozen 0.1.0 copy in `tests/us-household/legacy/`.
 - **Vitest** for all tests. `@testing-library/react` for components.
 - **No emoji icons** in source.
 
