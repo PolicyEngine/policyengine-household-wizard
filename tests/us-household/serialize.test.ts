@@ -91,6 +91,13 @@ describe('serialize / deserialize round-trip', () => {
     expect(deserializeDraft('p=adult:30:se5:se-7').people[0].selfEmploymentIncome).toBe(-7);
   });
 
+  it('reads household fields as 0.1 did: whole years, known marital statuses', () => {
+    const draft = deserializeDraft('state=&marital=divorced&year=2026.9');
+    expect(draft.state).toBeNull();
+    expect(draft.maritalStatus).toBeNull();
+    expect(draft.year).toBe(2026);
+  });
+
   it('reads the second field as the age, never as a token', () => {
     expect(deserializeDraft('p=adult:e50000:D').people[0]).toStrictEqual({
       id: 'adult-1',
