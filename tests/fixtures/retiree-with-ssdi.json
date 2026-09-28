@@ -1,0 +1,19 @@
+{
+  "name": "adult with Social Security retirement and SSDI in TX",
+  "draft": {
+    "state": "TX",
+    "county": null,
+    "zip": null,
+    "maritalStatus": "single",
+    "year": 2026,
+    "people": [
+      {
+        "id": "adult-1",
+        "kind": "adult",
+        "age": 67,
+        "socialSecurityIncome": 12000,
+        "ssdiAmount": 6000
+      }
+    ]
+  }
+}

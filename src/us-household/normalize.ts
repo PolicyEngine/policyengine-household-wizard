@@ -139,6 +139,8 @@ function normalizePerson(
     selfEmploymentIncome: coerceNumber(legacy.self_employment_income_annual),
     ssiAmount: coerceNumber(legacy.ssiAmount ?? legacy.ssi_amount),
     ssdiAmount: coerceNumber(legacy.ssdiAmount ?? legacy.ssdi_amount),
+    // `socialSecurityIncome` excludes SSDI; a legacy total that includes it
+    // would count SSDI twice next to `ssdiAmount`.
     socialSecurityIncome: coerceNumber(legacy.social_security_annual),
   };
 }

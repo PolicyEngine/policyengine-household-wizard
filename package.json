@@ -36,10 +36,12 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly && tsx scripts/emit-subpath-types.ts",
     "test": "vitest run",
+    "test:live": "POLICYENGINE_LIVE_API=1 vitest run tests/us-household/v1Payload.live.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "regenerate-counties": "tsx scripts/generate-counties.ts",
+    "regenerate-variable-graph": "tsx scripts/generate-variable-graph.ts",
     "prepublishOnly": "bun run build"
   },
   "sideEffects": [
