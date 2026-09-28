@@ -84,8 +84,8 @@ for migrating from each app's local wizard.
   app-specific adapter) at submit time.
 - **No income field overrides another.** An input on a PolicyEngine US total
   such as `social_security` replaces the sum of its components, so components
-  sent alongside it are ignored. `socialSecurityIncome` therefore sets
-  `social_security_retirement` and `ssdiAmount` sets
+  sent alongside it are left out of the total. `socialSecurityIncome`
+  therefore sets `social_security_retirement` and `ssdiAmount` sets
   `social_security_disability`; the model adds them. Property tests check the
   adapter against a snapshot of the PolicyEngine US variable graph (refresh it
   with `bun run regenerate-variable-graph`), and each total the adapter sets

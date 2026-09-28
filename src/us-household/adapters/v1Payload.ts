@@ -103,7 +103,8 @@ export const FLAG_TO_VARIABLE: Readonly<Record<keyof USPersonFlags, string>> = {
  *
  * Where PolicyEngine US defines a variable as the sum of components (`adds`),
  * an input on the total replaces that sum: components sent alongside it are
- * ignored, and rules that read a component see zero. `social_security` adds
+ * left out of the total and everything computed from it, and components not
+ * sent read as zero where rules use them directly. `social_security` adds
  * retirement, disability, survivors, and dependents benefits, so
  * `socialSecurityIncome` sets `social_security_retirement` and `ssdiAmount`
  * sets `social_security_disability`; the model sums them.

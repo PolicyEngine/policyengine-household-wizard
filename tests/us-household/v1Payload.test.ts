@@ -89,7 +89,7 @@ describe('toV1HouseholdPayload', () => {
     // policyengine-us computes `social_security` as the sum of its retirement,
     // disability, survivors, and dependents components. Sending the total as
     // an input skips that sum, so a separately sent `social_security_disability`
-    // silently dropped out of the result (12,000 instead of 18,000).
+    // was left out of the total (12,000 instead of 18,000).
     const draft = updatePerson(singleAdult(), 'adult-1', {
       age: 67,
       employmentIncome: undefined,

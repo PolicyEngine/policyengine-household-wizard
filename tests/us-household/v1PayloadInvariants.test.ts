@@ -22,8 +22,8 @@ import type {
  *
  * PolicyEngine US computes some variables as the sum of components (`adds`,
  * `subtracts`). An input on such a total replaces the sum, so a component sent
- * alongside it is ignored: `social_security` plus `social_security_disability`
- * used to drop SSDI.
+ * alongside it is left out of the total: `social_security` plus
+ * `social_security_disability` used to leave SSDI out of Social Security.
  */
 
 interface GraphNode {
