@@ -3,25 +3,30 @@
  * Generate `tests/us-household/data/policyengine-us-variable-graph.json` from
  * PolicyEngine US metadata. The V1 payload invariant tests read it to check
  * that the adapter never sends a variable together with one of its
- * components. Run after changing the adapter's variable mapping, or when
+ * components, and never sends a computed variable for only some people. Run
+ * after changing the adapter's variable mapping, or when
  * PolicyEngine US restructures the variables it sets:
  *
  *   bun run regenerate-variable-graph
  *
  * The snapshot holds every variable the adapter can emit plus the transitive
- * `adds`/`subtracts` components beneath each one. Components given as a
- * parameter path are resolved to the union of that list parameter's values
- * across all dates.
+ * `adds`/`subtracts` components beneath each one, whether the model computes
+ * each variable, and its default. Components given as a parameter path are resolved
+ * to the union of that list parameter's values across all dates.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FLAG_TO_VARIABLE, INCOME_TO_VARIABLE } from '../src/us-household/adapters/v1Payload';
+import {
+  FLAG_TO_VARIABLE,
+  INCOME_TO_VARIABLE,
+  SSI_TAKE_UP_VARIABLE,
+} from '../src/us-household/adapters/v1Payload';
 
 const METADATA_URL = 'https://api.policyengine.org/us/metadata';
 
 /** Person variables the adapter sets outside the flag and income maps. */
-const OTHER_PERSON_VARIABLES = ['age', 'is_tax_unit_dependent'];
+const OTHER_PERSON_VARIABLES = ['age', 'is_tax_unit_dependent', SSI_TAKE_UP_VARIABLE];
 /** Household variables the adapter sets. */
 const HOUSEHOLD_VARIABLES = ['state_name', 'county'];
 
@@ -29,6 +34,9 @@ type Components = string[] | string | null | undefined;
 
 interface MetadataVariable {
   entity: string;
+  /** False when the model computes the variable (a formula, adds, or subtracts). */
+  isInputVariable?: boolean;
+  defaultValue?: unknown;
   adds?: Components;
   subtracts?: Components;
 }
@@ -47,6 +55,15 @@ interface MetadataPayload {
 
 export interface VariableGraphNode {
   entity: string;
+  /**
+   * False when the model computes the variable. policyengine-core stores one
+   * array per variable and period for a whole entity, so an input for one
+   * person gives everyone else the stored default instead of the computed
+   * value.
+   */
+  isInputVariable: boolean;
+  /** What a person who sends nothing holds, for input variables. */
+  defaultValue: unknown;
   adds: string[];
   subtracts: string[];
 }
@@ -98,8 +115,13 @@ export function buildVariableGraph(
     if (!variable) {
       throw new Error(`Variable "${name}" is missing from PolicyEngine US metadata.`);
     }
+    if (typeof variable.isInputVariable !== 'boolean') {
+      throw new Error(`Variable "${name}" has no isInputVariable flag in metadata.`);
+    }
     const node: VariableGraphNode = {
       entity: variable.entity,
+      isInputVariable: variable.isInputVariable,
+      defaultValue: variable.defaultValue ?? null,
       adds: resolveComponents(variable.adds, metadata.parameters),
       subtracts: resolveComponents(variable.subtracts, metadata.parameters),
     };

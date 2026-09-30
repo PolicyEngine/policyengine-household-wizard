@@ -1,6 +1,26 @@
+import { toAmount } from './amount';
 import { isUSStateCode } from './states';
 import { isCountyCode } from './counties';
-import type { USHouseholdDraft, ValidationIssue, ValidationResult } from './types';
+import type {
+  USHouseholdDraft,
+  USPersonDraft,
+  ValidationIssue,
+  ValidationResult,
+} from './types';
+
+/**
+ * "adult 2" or "dependent 1": people are numbered within their kind, in draft
+ * order, matching the labels apps show.
+ */
+function personLabel(people: USPersonDraft[], index: number): string {
+  const { kind } = people[index];
+  const ordinal = people.slice(0, index + 1).filter((person) => person.kind === kind).length;
+  return `${kind} ${ordinal}`;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export interface ValidateOptions {
   /**
@@ -72,12 +92,29 @@ export function validate(
     });
   }
 
+  // An `ssi` amount sent for one person stops PolicyEngine US from computing
+  // SSI for everyone else. So the V1 adapter sends entered amounts only when
+  // everyone has one (0 included), and the missing ones are asked for here.
+  const someoneReceivesSsi = draft.people.some((person) => {
+    const amount = toAmount(person.ssiAmount);
+    return amount !== undefined && amount !== 0;
+  });
+
   draft.people.forEach((person, index) => {
+    const label = personLabel(draft.people, index);
     if (requireAges && (person.age === null || person.age === undefined)) {
       issues.push({
         code: 'person.age.required',
         path: `people[${index}].age`,
-        message: `Age is required for ${person.kind === 'adult' ? `adult ${index + 1}` : `dependent ${index + 1}`}.`,
+        message: `Age is required for ${label}.`,
+      });
+    }
+
+    if (someoneReceivesSsi && toAmount(person.ssiAmount) === undefined) {
+      issues.push({
+        code: 'person.ssiAmount.requiredWhenAnyReceives',
+        path: `people[${index}].ssiAmount`,
+        message: `SSI is required for ${label} because someone in the household receives SSI. Enter 0 if they receive none.`,
       });
     }
 
@@ -97,14 +134,14 @@ export function validate(
         issues.push({
           code: 'person.age.dependentTooOld',
           path: `people[${index}].age`,
-          message: `Dependent ${index + 1} is older than 23; confirm they qualify.`,
+          message: `${capitalize(label)} is older than 23; confirm they qualify.`,
         });
       }
       if (person.kind === 'adult' && person.age < 14) {
         issues.push({
           code: 'person.age.adultTooYoung',
           path: `people[${index}].age`,
-          message: `Adult ${index + 1} is younger than 14.`,
+          message: `${capitalize(label)} is younger than 14.`,
         });
       }
     }

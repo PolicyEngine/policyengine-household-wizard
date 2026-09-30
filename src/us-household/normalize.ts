@@ -113,6 +113,11 @@ function coerceNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function positiveOrUndefined(value: unknown): number | undefined {
+  const parsed = coerceNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+}
+
 function coerceBoolean(value: unknown): boolean | undefined {
   if (value === undefined) {
     return undefined;
@@ -143,7 +148,9 @@ function normalizePerson(
       coerceNumber(legacy.employment_income) ??
       coerceNumber(legacy.earned_income),
     selfEmploymentIncome: coerceNumber(legacy.self_employment_income_annual),
-    ssiAmount: coerceNumber(legacy.ssiAmount ?? legacy.ssi_amount),
+    // Legacy snake_case drafts (cliff-watch) default `ssi_amount` to 0 and
+    // send SSI only when it is positive, so their 0 means "not entered".
+    ssiAmount: coerceNumber(legacy.ssiAmount) ?? positiveOrUndefined(legacy.ssi_amount),
     ssdiAmount: coerceNumber(legacy.ssdiAmount ?? legacy.ssdi_amount),
     // `socialSecurityIncome` excludes SSDI; a legacy total that includes it
     // would count SSDI twice next to `ssdiAmount`.
