@@ -127,6 +127,29 @@ describe('normalizeLegacyDraft', () => {
     });
   });
 
+  it("reads cliff-watch's default SSI of 0 as not entered", () => {
+    // cliff-watch writes ssi_amount 0 for everyone and sends SSI only when it
+    // is positive. Read as an entered 0, it would stop the model from
+    // computing anyone's SSI.
+    const draft = normalizeLegacyDraft({
+      state: 'CA',
+      marital_status: 'MARRIED',
+      people: [
+        { kind: 'adult', age: 70, ssi_amount: 0 },
+        { kind: 'adult', age: 70, ssi_amount: '600' },
+      ],
+    });
+    expect(draft.people[0].ssiAmount).toBeUndefined();
+    expect(draft.people[1].ssiAmount).toBe(600);
+
+    const camel = normalizeLegacyDraft({
+      state: 'CA',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 70, ssiAmount: 0 }],
+    });
+    expect(camel.people[0].ssiAmount).toBe(0);
+  });
+
   it('resolves a free-text county to its enum code', () => {
     const draft = normalizeLegacyDraft({
       state: 'CA',

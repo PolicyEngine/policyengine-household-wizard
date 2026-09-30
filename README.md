@@ -95,6 +95,20 @@ for migrating from each app's local wizard.
   with `bun run regenerate-variable-graph`). Each total the adapter sets
   directly, and each variable that more than one field sets, is listed with
   its reason in `tests/us-household/v1PayloadInvariants.test.ts`.
+- **Computed variables go to everyone or no one.** PolicyEngine stores each
+  person variable as one array covering everyone in the simulation, so an
+  input for one person on a variable the model computes gives everyone else
+  a stored default instead of the computed value: `ssi` sent for one adult
+  zeroed the other adult's SSI. The adapter therefore sends computed
+  variables for every person or no one, except employment and
+  self-employment income, which policyengine-us's Simulation moves onto
+  input variables. `kind` is sent for everyone as `is_tax_unit_dependent`.
+  `isFullTimeStudent` is sent as the input `is_full_time_college_student`,
+  and only from age 18, because the model counts ages 5 to 17 as K-12
+  students. `ssiAmount` is sent as `ssi` only when every person has an
+  amount; `validate()` asks for the missing ones, and an entered 0 is sent as
+  `takes_up_ssi_if_eligible: false`. Property tests check this against the
+  variable graph snapshot, which records which variables the model computes.
 
 ## Repository structure
 

@@ -1,15 +1,31 @@
 export type USMaritalStatus = 'single' | 'married';
 
+/**
+ * `'dependent'` means claimed as a tax dependent by someone in the household;
+ * `'adult'` means not claimed. Choose it from the user's answer, not from age.
+ * The V1 adapter sends it for every person as `is_tax_unit_dependent`. It puts
+ * everyone in one tax unit, where PolicyEngine US makes the two oldest adults
+ * head and spouse. Any other adult is then neither head, spouse nor
+ * dependent, and their income counts in the unit's gross income.
+ */
 export type USPersonKind = 'adult' | 'dependent';
 
 /**
  * Person-level fields that the wizard surfaces uniformly across apps. Apps that
- * do not collect a flag should leave it `undefined`; the adapters treat
- * `undefined` differently from `false` (omitted vs. explicitly set).
+ * do not collect a flag should leave it `undefined`. The V1 adapter sends only
+ * `true` and `false`; for these flags `false` and `undefined` give the same
+ * model results, and the difference matters to review screens and links.
  */
 export interface USPersonFlags {
   isDisabled?: boolean;
   isBlind?: boolean;
+  /**
+   * Full-time student at any level. PolicyEngine US counts everyone aged 5 to
+   * 17 as a K-12 student by age, so the V1 adapter sends this only from age 18,
+   * as full-time college enrollment ("is_full_time_college_student"). Rules
+   * for college students (for example SNAP's student rule and New Jersey's
+   * exemption for dependents attending college) then count that person.
+   */
   isFullTimeStudent?: boolean;
   isPregnant?: boolean;
   needsCare?: boolean;
@@ -33,8 +49,14 @@ export interface USPersonIncomes {
    */
   socialSecurityIncome?: number;
   /**
-   * Reported Supplemental Security Income; "ssi" in PolicyEngine US. Setting it
-   * replaces the model's own SSI calculation.
+   * Reported Supplemental Security Income; "ssi" in PolicyEngine US. It
+   * replaces the model's own SSI calculation, and that works for a whole
+   * household only: an `ssi` input for one person would stop the model from
+   * computing everyone else's. So the V1 adapter sends amounts only when every
+   * person has one, and `validate()` asks for the missing ones. Enter 0 for a
+   * person who receives none; a 0 is always sent, as
+   * "takes_up_ssi_if_eligible" false. Leave it blank to let the model compute
+   * a person's SSI.
    */
   ssiAmount?: number;
   /** Social Security Disability Insurance; "social_security_disability" in PolicyEngine US. */

@@ -59,7 +59,12 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   `validate`, and `toV1HouseholdPayload` together. Always add a fixture in
   `tests/fixtures/`. Prefer component variables to totals
   (`social_security_retirement`, not `social_security`); a total needs a
-  reviewed entry in `tests/us-household/v1PayloadInvariants.test.ts`. Then run
+  reviewed entry in `tests/us-household/v1PayloadInvariants.test.ts`. Map
+  fields to input variables. A variable PolicyEngine US computes must be sent
+  for every person or no one (policyengine-core stores one array per variable
+  for a whole entity, so a partial input overrides everyone else's formula);
+  the invariant tests enforce this, with reviewed exceptions in
+  `REVIEWED_PARTIAL_COMPUTED`. Then run
   `bun run regenerate-variable-graph` so the invariant tests see the new
   variable.
 - New country (e.g. UK) → mirror the structure under

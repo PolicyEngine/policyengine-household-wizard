@@ -42,7 +42,9 @@ function serializePerson(person: USPersonDraft): string {
   ];
   for (const [key, letter] of INCOME_KEYS) {
     const value = person[key] as number | undefined;
-    if (value !== undefined && value !== null && value !== 0) {
+    // An SSI amount of 0 is an answer ("receives none") that the V1 adapter
+    // sends; other zero amounts give the same results as a blank.
+    if (value !== undefined && value !== null && (value !== 0 || key === 'ssiAmount')) {
       segments.push(`${letter}${value}`);
     }
   }

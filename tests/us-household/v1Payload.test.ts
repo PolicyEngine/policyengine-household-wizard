@@ -19,6 +19,7 @@ describe('toV1HouseholdPayload', () => {
     expect(Object.keys(data.people)).toEqual(['adult-1']);
     expect(data.people['adult-1']).toEqual({
       age: { '2026': 30 },
+      is_tax_unit_dependent: { '2026': false },
       employment_income: { '2026': 50000 },
     });
 
@@ -44,14 +45,19 @@ describe('toV1HouseholdPayload', () => {
     });
   });
 
-  it('marks dependents with is_tax_unit_dependent', () => {
+  it('sends is_tax_unit_dependent for every person, from their kind', () => {
+    // is_tax_unit_dependent is computed (not head and not spouse). Sending it
+    // for dependents only gave every adult a stored false whenever a
+    // dependent was listed, and left the formula to decide otherwise, so a
+    // third adult's status depended on whether a child was in the draft.
     let draft = singleAdult();
     draft = addPerson(draft, 'dependent', { age: 8 });
-    const envelope = toV1HouseholdPayload(draft);
-    expect(envelope.data.people['dependent-1']).toEqual({
+    const { people } = toV1HouseholdPayload(draft).data;
+    expect(people['dependent-1']).toEqual({
       age: { '2026': 8 },
       is_tax_unit_dependent: { '2026': true },
     });
+    expect(people['adult-1'].is_tax_unit_dependent).toEqual({ '2026': false });
   });
 
   it('passes through person flags as PolicyEngine variables', () => {
@@ -77,11 +83,84 @@ describe('toV1HouseholdPayload', () => {
     expect(envelope.data.people['adult-1']).toMatchObject({
       is_disabled: { '2026': true },
       is_blind: { '2026': false },
-      is_full_time_student: { '2026': true },
+      is_full_time_college_student: { '2026': true },
       is_pregnant: { '2026': true },
       is_incapable_of_self_care: { '2026': true },
       ssi: { '2026': 600 },
       social_security_disability: { '2026': 1200 },
+    });
+  });
+
+  it('sends the student flag as college enrollment, from age 18 only', () => {
+    // is_full_time_student is computed as college or K-12 (ages 5 to 17).
+    // Sending it for one person gave everyone else a stored false, so a
+    // flagged college student took K-12 status away from their siblings.
+    let draft = singleAdult();
+    draft = addPerson(draft, 'dependent', { age: 19, isFullTimeStudent: true });
+    draft = addPerson(draft, 'dependent', { age: 17, isFullTimeStudent: true });
+    draft = addPerson(draft, 'dependent', { age: 10, isFullTimeStudent: false });
+    draft = addPerson(draft, 'dependent', { age: 8 });
+    draft = addPerson(draft, 'adult', { age: null, isFullTimeStudent: true });
+    const { people } = toV1HouseholdPayload(draft).data;
+
+    for (const record of Object.values(people)) {
+      expect(record).not.toHaveProperty('is_full_time_student');
+    }
+    expect(people['dependent-1'].is_full_time_college_student).toEqual({ '2026': true });
+    expect(people['dependent-2']).not.toHaveProperty('is_full_time_college_student');
+    expect(people['dependent-3']).not.toHaveProperty('is_full_time_college_student');
+    // With no age the model assumes an adult, so the answer is kept.
+    expect(people['adult-2'].is_full_time_college_student).toEqual({ '2026': true });
+  });
+
+  it('sends only true and false for flags', () => {
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      isDisabled: null as unknown as boolean,
+      isBlind: false,
+    });
+    const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+    expect(person).not.toHaveProperty('is_disabled');
+    expect(person.is_blind).toEqual({ '2026': false });
+  });
+
+  describe('SSI', () => {
+    function couple(first: number | undefined, second: number | undefined) {
+      let draft = createBlankDraft(2026);
+      draft = { ...draft, state: 'CA', maritalStatus: 'married' };
+      draft = addPerson(draft, 'adult', { age: 70, ssiAmount: first });
+      draft = addPerson(draft, 'adult', { age: 70, ssiAmount: second });
+      return toV1HouseholdPayload(draft).data.people;
+    }
+
+    it('leaves SSI to the model when only some people have an amount', () => {
+      // An ssi input for one person gives everyone else a stored 0: live, a
+      // couple aged 70 in CA got 8,946 each, but 600 and 0 once the first
+      // reported 600.
+      const people = couple(600, undefined);
+      expect(people['adult-1']).not.toHaveProperty('ssi');
+      expect(people['adult-2']).not.toHaveProperty('ssi');
+    });
+
+    it('sends every amount once everyone has one', () => {
+      const people = couple(600, 0);
+      expect(people['adult-1'].ssi).toEqual({ '2026': 600 });
+      expect(people['adult-2'].ssi).toEqual({ '2026': 0 });
+    });
+
+    it('sends an entered 0 as not taking up SSI, for that person only', () => {
+      const people = couple(0, undefined);
+      expect(people['adult-1'].takes_up_ssi_if_eligible).toEqual({ '2026': false });
+      expect(people['adult-2']).not.toHaveProperty('takes_up_ssi_if_eligible');
+      expect(people['adult-1']).not.toHaveProperty('ssi');
+      expect(people['adult-2']).not.toHaveProperty('ssi');
+    });
+
+    it('needs no ssi input when everyone entered 0', () => {
+      const people = couple(0, 0);
+      for (const record of Object.values(people)) {
+        expect(record).not.toHaveProperty('ssi');
+        expect(record.takes_up_ssi_if_eligible).toEqual({ '2026': false });
+      }
     });
   });
 
@@ -100,6 +179,7 @@ describe('toV1HouseholdPayload', () => {
     expect(person).not.toHaveProperty('social_security');
     expect(person).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       social_security_retirement: { '2026': 12000 },
       social_security_disability: { '2026': 6000 },
     });
@@ -120,6 +200,7 @@ describe('toV1HouseholdPayload', () => {
     expect(person).not.toHaveProperty('taxable_pension_income');
     expect(person).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       taxable_public_pension_income: { '2026': 20000 },
       taxable_private_pension_income: { '2026': 10000 },
     });
@@ -133,6 +214,7 @@ describe('toV1HouseholdPayload', () => {
     });
     expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       taxable_private_pension_income: { '2026': 30000 },
     });
   });
@@ -147,6 +229,7 @@ describe('toV1HouseholdPayload', () => {
     });
     expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       taxable_public_pension_income: { '2026': 20000 },
       taxable_private_pension_income: { '2026': 15000 },
     });
@@ -164,6 +247,7 @@ describe('toV1HouseholdPayload', () => {
     });
     expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       taxable_private_pension_income: { '2026': 12000 },
     });
   });
@@ -179,6 +263,7 @@ describe('toV1HouseholdPayload', () => {
     });
     expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
       age: { '2026': 67 },
+      is_tax_unit_dependent: { '2026': false },
       taxable_private_pension_income: { '2026': 17000 },
     });
   });

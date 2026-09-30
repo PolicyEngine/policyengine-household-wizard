@@ -77,6 +77,45 @@ describe('validate', () => {
     expect(isComplete(completeMarried())).toBe(true);
   });
 
+  it('numbers people within their kind', () => {
+    let draft = completeMarried();
+    draft = addPerson(draft, 'dependent', { age: null });
+    const result = validate(draft);
+    expect(!result.ok && result.issues[0].message).toBe('Age is required for dependent 1.');
+  });
+
+  describe('SSI', () => {
+    function couple(first?: number, second?: number) {
+      let draft = createBlankDraft(2026);
+      draft.state = 'CA';
+      draft.maritalStatus = 'married';
+      draft = addPerson(draft, 'adult', { age: 70, ssiAmount: first });
+      draft = addPerson(draft, 'adult', { age: 70, ssiAmount: second });
+      return draft;
+    }
+
+    it('asks for everyone else once anyone receives SSI', () => {
+      // The adapter can only send SSI amounts for everyone or no one.
+      const result = validate(couple(600, undefined));
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.issues).toEqual([
+        {
+          code: 'person.ssiAmount.requiredWhenAnyReceives',
+          path: 'people[1].ssiAmount',
+          message:
+            'SSI is required for adult 2 because someone in the household receives SSI. ' +
+            'Enter 0 if they receive none.',
+        },
+      ]);
+    });
+
+    it('needs nothing more when amounts are complete, all 0, or all blank', () => {
+      expect(validate(couple(600, 0)).ok).toBe(true);
+      expect(validate(couple(0, undefined)).ok).toBe(true);
+      expect(validate(couple(undefined, undefined)).ok).toBe(true);
+    });
+  });
+
   it('skips age requirement when requireAges is false', () => {
     let draft = createBlankDraft(2026);
     draft.state = 'CA';
