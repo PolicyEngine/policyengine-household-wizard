@@ -2,12 +2,17 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import graph from './data/policyengine-us-variable-graph.json' with { type: 'json' };
 import {
+  COLLEGE_MIN_AGE,
   FLAG_TO_VARIABLE,
   INCOME_TO_VARIABLE,
+  SSI_TAKE_UP_VARIABLE,
   toV1HouseholdPayload,
   type ToV1PayloadOptions,
 } from '@/us-household/adapters/v1Payload';
+import { addPerson, createBlankDraft } from '@/us-household/draft';
+import { deserializeDraft, serializeDraft } from '@/us-household/serialize';
 import { US_STATES } from '@/us-household/states';
+import { validate } from '@/us-household/validate';
 import type {
   USHouseholdDraft,
   USPersonDraft,
@@ -24,10 +29,19 @@ import type {
  * `subtracts`). An input on such a total replaces the sum, so a component sent
  * alongside it is left out of the total: `social_security` plus
  * `social_security_disability` used to leave SSDI out of Social Security.
+ *
+ * policyengine-core stores one array per variable and period for a whole
+ * entity. The first person with an input on a computed variable allocates it,
+ * filled with the variable's default, so the formula never runs for anyone
+ * else: `ssi` sent for one person zeroed everyone else's SSI. So a computed
+ * variable goes to every person or to no one, and only with values people
+ * entered.
  */
 
 interface GraphNode {
   entity: string;
+  isInputVariable: boolean;
+  defaultValue: unknown;
   adds: string[];
   subtracts: string[];
 }
@@ -63,9 +77,83 @@ const REVIEWED_SHARED_VARIABLES: Record<
   },
 };
 
+/**
+ * Computed variables the adapter may send for only some people, and why no one
+ * else is held at a stored default. Sending another computed variable for some
+ * people only fails the tests below until it is reviewed here.
+ */
+const REVIEWED_PARTIAL_COMPUTED: Record<string, string> = {
+  employment_income:
+    "policyengine-us's Simulation moves the whole array onto employment_income_before_lsr, " +
+    'an input whose default (0) is what a person without an amount would have.',
+  self_employment_income:
+    "policyengine-us's Simulation moves the whole array onto self_employment_income_before_lsr, " +
+    'an input whose default (0) is what a person without an amount would have.',
+};
+
+/**
+ * Input variables whose default is not simply "none" (false or 0), and why a
+ * person the adapter sends nothing for should hold it.
+ */
+const REVIEWED_INPUT_DEFAULTS: Record<string, { value: unknown; reason: string }> = {
+  age: {
+    value: 40,
+    reason: 'The model age for a person sent without one. validate() requires ages by default.',
+  },
+  [SSI_TAKE_UP_VARIABLE]: {
+    value: true,
+    reason: 'A person without an SSI answer may take up SSI; only an entered 0 sends false.',
+  },
+};
+
+type DraftField = keyof USPersonFlags | keyof USPersonIncomes | 'age' | 'kind';
+
 const INCOME_FIELDS = Object.keys(INCOME_TO_VARIABLE) as Array<keyof USPersonIncomes>;
 const FLAG_FIELDS = Object.keys(FLAG_TO_VARIABLE) as Array<keyof USPersonFlags>;
 const INCOME_VARIABLES = new Set(Object.values(INCOME_TO_VARIABLE));
+const FLAG_VARIABLES = new Set(Object.values(FLAG_TO_VARIABLE));
+
+/** The draft fields each person variable the adapter can send comes from. */
+const SOURCES: Record<string, DraftField[]> = {
+  age: ['age'],
+  is_tax_unit_dependent: ['kind'],
+  [SSI_TAKE_UP_VARIABLE]: ['ssiAmount'],
+};
+for (const [field, variable] of [
+  ...Object.entries(FLAG_TO_VARIABLE),
+  ...Object.entries(INCOME_TO_VARIABLE),
+]) {
+  SOURCES[variable] = [...(SOURCES[variable] ?? []), field as DraftField];
+}
+
+/**
+ * Whether a person answered a field. Written independently of the adapter's
+ * parsing so the tests check that `validate()` and the adapter agree with it.
+ */
+function isEntered(person: USPersonDraft, field: DraftField): boolean {
+  const value = (person as unknown as Record<string, unknown>)[field];
+  if (field === 'kind') {
+    return true;
+  }
+  if (field === 'age') {
+    return value !== null && value !== undefined;
+  }
+  if ((FLAG_FIELDS as string[]).includes(field)) {
+    return typeof value === 'boolean';
+  }
+  return amountOf(value) !== undefined;
+}
+
+function amountOf(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
 
 function nodeOf(variable: string): GraphNode {
   const node = VARIABLES[variable];
@@ -92,19 +180,29 @@ function isTotal(variable: string): boolean {
 }
 
 // Amounts may be absent, null (drafts parsed from JSON), zero, negative
-// (self-employment losses), or not finite (a form that parsed bad input).
+// (self-employment losses), not finite (a form that parsed bad input), or
+// strings from a form.
 const amountArb = fc.oneof(
   { weight: 3, arbitrary: fc.constant(undefined) },
   { weight: 1, arbitrary: fc.constant(null) },
   { weight: 1, arbitrary: fc.constantFrom(Number.NaN, Infinity, -Infinity) },
+  { weight: 1, arbitrary: fc.constantFrom('600', '0', '', ' ', 'abc') },
+  { weight: 2, arbitrary: fc.constant(0) },
   { weight: 6, arbitrary: fc.integer({ min: -100_000, max: 5_000_000 }) },
 );
+
+// Flags may be absent, null (drafts parsed from JSON), or answered.
+const flagArb = fc.constantFrom(undefined, null, true, false);
 
 const personArb = fc
   .record({
     kind: fc.constantFrom<USPersonDraft['kind']>('adult', 'dependent'),
-    age: fc.option(fc.integer({ min: 0, max: 120 }), { nil: null }),
-    flags: fc.tuple(...FLAG_FIELDS.map(() => fc.option(fc.boolean(), { nil: undefined }))),
+    // Ages may also be strings or NaN in drafts parsed from JSON or forms.
+    age: fc.oneof(
+      { weight: 8, arbitrary: fc.option(fc.integer({ min: 0, max: 120 }), { nil: null }) },
+      { weight: 1, arbitrary: fc.constantFrom('17', '18', Number.NaN) },
+    ) as fc.Arbitrary<number | null>,
+    flags: fc.tuple(...FLAG_FIELDS.map(() => flagArb)),
     incomes: fc.tuple(...INCOME_FIELDS.map(() => amountArb)),
   })
   .map(({ kind, age, flags, incomes }) => {
@@ -142,6 +240,17 @@ const optionsArb: fc.Arbitrary<ToV1PayloadOptions> = fc.record({
 function personVariables(draft: USHouseholdDraft, options?: ToV1PayloadOptions) {
   const { people } = toV1HouseholdPayload(draft, options).data;
   return draft.people.map((person) => ({ person, record: people[person.id] }));
+}
+
+function carriers(draft: USHouseholdDraft, variable: string): string[] {
+  return personVariables(draft)
+    .filter(({ record }) => variable in record)
+    .map(({ person }) => person.id);
+}
+
+function withoutSsi(record: Record<string, unknown>) {
+  const { [INCOME_TO_VARIABLE.ssiAmount]: _ssi, ...rest } = record;
+  return rest;
 }
 
 describe('toV1HouseholdPayload invariants', () => {
@@ -218,27 +327,177 @@ describe('toV1HouseholdPayload invariants', () => {
     expect(shared).toEqual(reviewed);
   });
 
-  it('carries every finite entered amount into its variable', () => {
+  it('carries every entered amount other than SSI into its variable', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         for (const { person, record } of personVariables(draft)) {
           const entered: Record<string, number> = {};
-          for (const field of INCOME_FIELDS) {
-            const value = person[field];
-            if (typeof value === 'number' && Number.isFinite(value)) {
+          for (const field of INCOME_FIELDS.filter((name) => name !== 'ssiAmount')) {
+            const value = amountOf(person[field]);
+            if (value !== undefined) {
               const variable = INCOME_TO_VARIABLE[field];
               entered[variable] = (entered[variable] ?? 0) + value;
             }
           }
           const sent = Object.fromEntries(
-            Object.entries(record)
+            Object.entries(withoutSsi(record))
               .filter(([variable]) => INCOME_VARIABLES.has(variable))
-              .map(([variable, byYear]) => [variable, byYear?.[String(draft.year)]]),
+              .map(([variable, byYear]) => [
+                variable,
+                (byYear as Record<string, unknown>)?.[String(draft.year)],
+              ]),
           );
           expect(sent).toEqual(entered);
         }
       }),
     );
+  });
+
+  it('sends a computed variable for every person or for no one', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        const sent = new Set(personVariables(draft).flatMap(({ record }) => Object.keys(record)));
+        for (const variable of sent) {
+          if (nodeOf(variable).isInputVariable || variable in REVIEWED_PARTIAL_COMPUTED) {
+            continue;
+          }
+          expect(carriers(draft, variable), `${variable} is computed`).toEqual(
+            draft.people.map((person) => person.id),
+          );
+        }
+      }),
+    );
+  });
+
+  it('sends a person only variables for fields they answered', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        for (const { person, record } of personVariables(draft)) {
+          for (const variable of Object.keys(record)) {
+            const sources = SOURCES[variable] ?? [];
+            expect(
+              sources.some((field) => isEntered(person, field)),
+              `${person.id} carries ${variable} without answering ${sources.join(' or ')}`,
+            ).toBe(true);
+          }
+        }
+      }),
+    );
+  });
+
+  it("never lets one person's answers change another person's variables, except SSI", () => {
+    // SSI is the one household-wide answer: see the SSI property below.
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        for (const { person, record } of personVariables(draft)) {
+          const alone = toV1HouseholdPayload({ ...draft, people: [person] }).data.people[
+            person.id
+          ];
+          expect(withoutSsi(record)).toEqual(withoutSsi(alone));
+        }
+      }),
+    );
+  });
+
+  it('sends SSI amounts only when every person has one, and each 0 as no take-up', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        const year = String(draft.year);
+        const amounts = draft.people.map((person) => amountOf(person.ssiAmount));
+        const complete = amounts.every((amount) => amount !== undefined);
+        const anyReceives = amounts.some((amount) => amount !== undefined && amount !== 0);
+        personVariables(draft).forEach(({ record }, index) => {
+          const amount = amounts[index];
+          expect(record.ssi).toEqual(
+            complete && anyReceives ? { [year]: amount } : undefined,
+          );
+          expect(record[SSI_TAKE_UP_VARIABLE]).toEqual(
+            amount === 0 ? { [year]: false } : undefined,
+          );
+        });
+      }),
+    );
+  });
+
+  it('asks for SSI in validate() exactly when the adapter leaves out an entered amount', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        const enteredAmounts = draft.people.some((person) => {
+          const amount = amountOf(person.ssiAmount);
+          return amount !== undefined && amount !== 0;
+        });
+        const sentAmounts = personVariables(draft).some(({ record }) => 'ssi' in record);
+        const expected =
+          enteredAmounts && !sentAmounts
+            ? draft.people.flatMap((person, index) =>
+                isEntered(person, 'ssiAmount') ? [] : [`people[${index}].ssiAmount`],
+              )
+            : [];
+        const result = validate(draft);
+        const flagged = (result.ok ? [] : result.issues)
+          .filter((issue) => issue.code === 'person.ssiAmount.requiredWhenAnyReceives')
+          .map((issue) => issue.path);
+        expect(flagged).toEqual(expected);
+      }),
+    );
+  });
+
+  it('keeps SSI answers, validation, and the payload through a URL round trip', () => {
+    const ssiArb = fc.constantFrom(undefined, 0, 600, 9432);
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            kind: fc.constantFrom<USPersonDraft['kind']>('adult', 'dependent'),
+            age: fc.integer({ min: 0, max: 100 }),
+            ssiAmount: ssiArb,
+          }),
+          { minLength: 1, maxLength: 5 },
+        ),
+        (people) => {
+          let draft: USHouseholdDraft = {
+            ...createBlankDraft(2026),
+            state: 'CA',
+            maritalStatus: 'single',
+          };
+          for (const { kind, ...person } of people) {
+            draft = addPerson(draft, kind, person);
+          }
+          const round = deserializeDraft(serializeDraft(draft));
+          expect(validate(round)).toEqual(validate(draft));
+          expect(toV1HouseholdPayload(round)).toEqual(toV1HouseholdPayload(draft));
+        },
+      ),
+    );
+  });
+
+  it('sends the student flag only as college enrollment, and not for children', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        const year = String(draft.year);
+        for (const { person, record } of personVariables(draft)) {
+          expect(record).not.toHaveProperty('is_full_time_student');
+          const age = amountOf(person.age);
+          const child = age !== undefined && age < COLLEGE_MIN_AGE;
+          const flag = person.isFullTimeStudent;
+          expect(record[FLAG_TO_VARIABLE.isFullTimeStudent]).toEqual(
+            typeof flag === 'boolean' && !child ? { [year]: flag } : undefined,
+          );
+        }
+      }),
+    );
+  });
+
+  it('sends only input variables whose default matches a blank answer', () => {
+    for (const variable of Object.keys(SOURCES)) {
+      const node = nodeOf(variable);
+      if (!node.isInputVariable) {
+        continue;
+      }
+      const expected =
+        REVIEWED_INPUT_DEFAULTS[variable]?.value ?? (FLAG_VARIABLES.has(variable) ? false : 0);
+      expect(node.defaultValue, `${variable}'s default: ${REGENERATE_HINT}`).toEqual(expected);
+    }
   });
 
   it('is deterministic and leaves the draft unchanged', () => {

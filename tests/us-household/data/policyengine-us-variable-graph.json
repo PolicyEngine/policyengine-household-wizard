@@ -4,21 +4,29 @@
   "variables": {
     "age": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 40,
       "adds": [],
       "subtracts": []
     },
     "child_support_received": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "county": {
       "entity": "household",
+      "isInputVariable": false,
+      "defaultValue": "UNKNOWN",
       "adds": [],
       "subtracts": []
     },
     "employment_income": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [
         "employment_income_before_lsr",
         "employment_income_behavioral_response"
@@ -27,61 +35,85 @@
     },
     "employment_income_before_lsr": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "employment_income_behavioral_response": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "is_blind": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
     "is_disabled": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
-    "is_full_time_student": {
+    "is_full_time_college_student": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
     "is_incapable_of_self_care": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
     "is_pregnant": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
     "is_tax_unit_dependent": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": false,
       "adds": [],
       "subtracts": []
     },
     "miscellaneous_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "qualified_dividend_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "rental_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "self_employment_income": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [
         "self_employment_income_before_lsr",
         "self_employment_income_behavioral_response"
@@ -90,51 +122,78 @@
     },
     "self_employment_income_before_lsr": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "self_employment_income_behavioral_response": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "social_security_disability": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "social_security_retirement": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "ssi": {
       "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "state_name": {
       "entity": "household",
+      "isInputVariable": false,
+      "defaultValue": "CA",
+      "adds": [],
+      "subtracts": []
+    },
+    "takes_up_ssi_if_eligible": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": true,
       "adds": [],
       "subtracts": []
     },
     "taxable_interest_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "taxable_private_pension_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "taxable_public_pension_income": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
     "unemployment_compensation": {
       "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     }
