@@ -257,26 +257,26 @@ describe.skipIf(process.env.POLICYENGINE_LIVE_API !== '1')(
       expect(flagged.taxUnit).toEqual(unflagged.taxUnit);
     }, 60_000);
 
-    it("keeps a third adult's dependent status whether or not a child is listed", async () => {
+    it('counts only people of kind dependent as dependents, with or without a child', async () => {
       // Before this fix is_tax_unit_dependent was sent for dependents only, so
       // adults were stored as non-dependents only when a child was listed.
+      // With no child, the model made the adult who is neither head nor
+      // spouse (the 43-year-old; head and spouse are the two oldest) a
+      // dependent, and the tax unit counted one dependent.
       const adults: Array<Pick<USPersonDraft, 'kind'> & Partial<USPersonDraft>> = [
         { kind: 'adult', age: 45 },
         { kind: 'adult', age: 43 },
         { kind: 'adult', age: 70 },
       ];
-      const withoutChild = await calculateDraft(household('CA', 'married', adults), [
-        'is_tax_unit_dependent',
-      ]);
+      const outputs = ['tax_unit_count_dependents'];
+      const withoutChild = await calculateDraft(household('CA', 'married', adults), [], outputs);
       const withChild = await calculateDraft(
         household('CA', 'married', [...adults, { kind: 'dependent', age: 8 }]),
-        ['is_tax_unit_dependent'],
+        [],
+        outputs,
       );
-      for (const id of ['adult-1', 'adult-2', 'adult-3']) {
-        expect(withoutChild.people[id].is_tax_unit_dependent).toBe(false);
-        expect(withChild.people[id].is_tax_unit_dependent).toBe(false);
-      }
-      expect(withChild.people['dependent-1'].is_tax_unit_dependent).toBe(true);
+      expect(withoutChild.taxUnit.tax_unit_count_dependents).toBe(0);
+      expect(withChild.taxUnit.tax_unit_count_dependents).toBe(1);
     }, 60_000);
   },
 );

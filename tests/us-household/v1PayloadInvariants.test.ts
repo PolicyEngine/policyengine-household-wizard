@@ -9,6 +9,8 @@ import {
   toV1HouseholdPayload,
   type ToV1PayloadOptions,
 } from '@/us-household/adapters/v1Payload';
+import { addPerson, createBlankDraft } from '@/us-household/draft';
+import { deserializeDraft, serializeDraft } from '@/us-household/serialize';
 import { US_STATES } from '@/us-household/states';
 import { validate } from '@/us-household/validate';
 import type {
@@ -195,7 +197,11 @@ const flagArb = fc.constantFrom(undefined, null, true, false);
 const personArb = fc
   .record({
     kind: fc.constantFrom<USPersonDraft['kind']>('adult', 'dependent'),
-    age: fc.option(fc.integer({ min: 0, max: 120 }), { nil: null }),
+    // Ages may also be strings or NaN in drafts parsed from JSON or forms.
+    age: fc.oneof(
+      { weight: 8, arbitrary: fc.option(fc.integer({ min: 0, max: 120 }), { nil: null }) },
+      { weight: 1, arbitrary: fc.constantFrom('17', '18', Number.NaN) },
+    ) as fc.Arbitrary<number | null>,
     flags: fc.tuple(...FLAG_FIELDS.map(() => flagArb)),
     incomes: fc.tuple(...INCOME_FIELDS.map(() => amountArb)),
   })
@@ -436,13 +442,43 @@ describe('toV1HouseholdPayload invariants', () => {
     );
   });
 
+  it('keeps SSI answers, validation, and the payload through a URL round trip', () => {
+    const ssiArb = fc.constantFrom(undefined, 0, 600, 9432);
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            kind: fc.constantFrom<USPersonDraft['kind']>('adult', 'dependent'),
+            age: fc.integer({ min: 0, max: 100 }),
+            ssiAmount: ssiArb,
+          }),
+          { minLength: 1, maxLength: 5 },
+        ),
+        (people) => {
+          let draft: USHouseholdDraft = {
+            ...createBlankDraft(2026),
+            state: 'CA',
+            maritalStatus: 'single',
+          };
+          for (const { kind, ...person } of people) {
+            draft = addPerson(draft, kind, person);
+          }
+          const round = deserializeDraft(serializeDraft(draft));
+          expect(validate(round)).toEqual(validate(draft));
+          expect(toV1HouseholdPayload(round)).toEqual(toV1HouseholdPayload(draft));
+        },
+      ),
+    );
+  });
+
   it('sends the student flag only as college enrollment, and not for children', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         const year = String(draft.year);
         for (const { person, record } of personVariables(draft)) {
           expect(record).not.toHaveProperty('is_full_time_student');
-          const child = typeof person.age === 'number' && person.age < COLLEGE_MIN_AGE;
+          const age = amountOf(person.age);
+          const child = age !== undefined && age < COLLEGE_MIN_AGE;
           const flag = person.isFullTimeStudent;
           expect(record[FLAG_TO_VARIABLE.isFullTimeStudent]).toEqual(
             typeof flag === 'boolean' && !child ? { [year]: flag } : undefined,

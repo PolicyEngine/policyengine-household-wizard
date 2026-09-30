@@ -119,7 +119,7 @@ function positiveOrUndefined(value: unknown): number | undefined {
 }
 
 function coerceBoolean(value: unknown): boolean | undefined {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return undefined;
   }
   return Boolean(value);

@@ -59,8 +59,10 @@ export interface ToV1PayloadOptions {
    */
   groupKeyStyle?: 'short' | 'verbose';
   /**
-   * If true, attaches member ids to the marital unit. Off by default because
-   * cliff-watch and other consumers send `marital_units: {}` and have it work.
+   * If true, puts the first two adults in one marital unit. Off by default for
+   * compatibility. With `marital_units: {}`, policyengine-core gives each
+   * person their own marital unit, so a married couple gets individual SSI
+   * rates instead of the couple rate; pass true for married drafts.
    */
   includeMaritalUnit?: boolean;
   /**
@@ -94,7 +96,10 @@ const VERBOSE_KEYS = {
  * formula never runs for them. A `{year: null}` value does not help, because
  * policyengine-core skips it. So each person gets input variables, which
  * have no formula and whose stored default is what the model would use
- * anyway, plus computed variables only when every person has an answer:
+ * anyway, plus computed variables only when every person has an answer. The
+ * exceptions are `employment_income` and `self_employment_income`, computed
+ * totals that policyengine-us's Simulation moves onto `*_before_lsr` inputs
+ * (reviewed in `REVIEWED_PARTIAL_COMPUTED` in the invariant tests).
  *
  * - `is_tax_unit_dependent` comes from `kind`, which every person has.
  * - `isFullTimeStudent` is sent as the input `is_full_time_college_student`,
@@ -137,8 +142,9 @@ export const COLLEGE_MIN_AGE = 18;
 
 /**
  * An entered 0 in `ssiAmount` is sent as this variable, set to false. It is an
- * input (default true), so it can be sent for some people only, and it gives
- * the same result as setting `ssi` to 0.
+ * input (default true), so it sets that person's SSI to 0 without affecting
+ * anyone else. In policyengine-us 1.764.6 only `ssi` reads it; later versions
+ * also read it in a county General Relief rule.
  */
 export const SSI_TAKE_UP_VARIABLE = 'takes_up_ssi_if_eligible';
 
@@ -203,7 +209,8 @@ function buildPersonVariables(person: USPersonDraft, year: string): V1PersonReco
   record.is_tax_unit_dependent = yearMap(year, person.kind === 'dependent');
 
   // Children's student status comes from the model's K-12 age rule.
-  const belowCollegeAge = typeof person.age === 'number' && person.age < COLLEGE_MIN_AGE;
+  const age = toAmount(person.age);
+  const belowCollegeAge = age !== undefined && age < COLLEGE_MIN_AGE;
   for (const [draftKey, variable] of Object.entries(FLAG_TO_VARIABLE)) {
     const value = (person as USPersonDraft)[draftKey as keyof USPersonFlags];
     if (draftKey === 'isFullTimeStudent' && belowCollegeAge) {
@@ -228,9 +235,14 @@ function buildPersonVariables(person: USPersonDraft, year: string): V1PersonReco
 
 /**
  * Build the PolicyEngine API V1 household payload for a draft. Everyone shares
- * one family, tax unit, SPM unit and household. A person with no age is sent
- * without one, and PolicyEngine US then uses its default age of 40, so apps
- * should validate ages first (`validate()` requires them by default).
+ * one family, tax unit, SPM unit and household. Check the draft with
+ * `validate()` first:
+ *
+ * - A person with no age is sent without one, and PolicyEngine US then uses
+ *   its default age of 40 (`validate()` requires ages by default).
+ * - SSI amounts are sent only when every person has one. If some are
+ *   missing, the entered amounts are dropped and the model computes
+ *   everyone's SSI (`validate()` reports `person.ssiAmount.requiredWhenAnyReceives`).
  */
 export function toV1HouseholdPayload(
   draft: USHouseholdDraft,

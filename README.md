@@ -100,7 +100,9 @@ for migrating from each app's local wizard.
   input for one person on a variable the model computes gives everyone else
   a stored default instead of the computed value: `ssi` sent for one adult
   zeroed the other adult's SSI. The adapter therefore sends computed
-  variables for every person or no one. `kind` is sent for everyone as `is_tax_unit_dependent`.
+  variables for every person or no one, except employment and
+  self-employment income, which policyengine-us's Simulation moves onto
+  input variables. `kind` is sent for everyone as `is_tax_unit_dependent`.
   `isFullTimeStudent` is sent as the input `is_full_time_college_student`,
   and only from age 18, because the model counts ages 5 to 17 as K-12
   students. `ssiAmount` is sent as `ssi` only when every person has an

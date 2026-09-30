@@ -45,6 +45,19 @@ describe('serialize / deserialize round-trip', () => {
     expect(query).toContain('p=adult%3A30');
   });
 
+  it('keeps an SSI amount of 0, which is an answer', () => {
+    // A 0 means "receives none"; the V1 adapter sends it and counts it
+    // toward the household's complete set of SSI amounts.
+    let draft = createBlankDraft(2026);
+    draft.state = 'CA';
+    draft.maritalStatus = 'married';
+    draft = addPerson(draft, 'adult', { age: 70, ssiAmount: 600 });
+    draft = addPerson(draft, 'adult', { age: 70, ssiAmount: 0 });
+    draft = addPerson(draft, 'dependent', { age: 8 });
+    const round = deserializeDraft(serializeDraft(draft));
+    expect(round.people.map((person) => person.ssiAmount)).toEqual([600, 0, undefined]);
+  });
+
   it('handles missing query gracefully', () => {
     const draft = deserializeDraft('');
     expect(draft.state).toBeNull();

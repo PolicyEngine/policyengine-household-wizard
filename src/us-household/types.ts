@@ -3,7 +3,10 @@ export type USMaritalStatus = 'single' | 'married';
 /**
  * `'dependent'` means claimed as a tax dependent by someone in the household;
  * `'adult'` means not claimed. Choose it from the user's answer, not from age.
- * The V1 adapter sends it for every person as `is_tax_unit_dependent`.
+ * The V1 adapter sends it for every person as `is_tax_unit_dependent`. It puts
+ * everyone in one tax unit, where PolicyEngine US makes the two oldest adults
+ * head and spouse. Any other adult is then neither head, spouse nor
+ * dependent, and their income counts in the unit's gross income.
  */
 export type USPersonKind = 'adult' | 'dependent';
 

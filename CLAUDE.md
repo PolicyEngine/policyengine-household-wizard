@@ -63,7 +63,8 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   fields to input variables. A variable PolicyEngine US computes must be sent
   for every person or no one (policyengine-core stores one array per variable
   for a whole entity, so a partial input overrides everyone else's formula);
-  the invariant tests enforce this. Then run
+  the invariant tests enforce this, with reviewed exceptions in
+  `REVIEWED_PARTIAL_COMPUTED`. Then run
   `bun run regenerate-variable-graph` so the invariant tests see the new
   variable.
 - New country (e.g. UK) → mirror the structure under
