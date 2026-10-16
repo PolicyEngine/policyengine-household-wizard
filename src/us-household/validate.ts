@@ -129,8 +129,19 @@ export function validate(
       }
     }
 
+    const tips = toAmount(person.tipIncome);
+    if (tips !== undefined && tips < 0) {
+      issues.push({
+        code: 'person.tipIncome.negative',
+        path: `people[${index}].tipIncome`,
+        message: `Tips for ${label} cannot be negative.`,
+      });
+    }
+
     // The V1 adapter sends only listed codes and 0, so any other answer would
-    // be dropped silently.
+    // be dropped silently. Without an answer, the model reads 0 and tips get
+    // no deduction; apps that do not ask about the deduction can treat
+    // `person.tippedOccupationCode.requiredWithTips` as a warning.
     const occupationCode = person.tippedOccupationCode as unknown;
     const answeredOccupation =
       occupationCode !== undefined &&
@@ -141,6 +152,12 @@ export function validate(
         code: 'person.tippedOccupationCode.invalid',
         path: `people[${index}].tippedOccupationCode`,
         message: `Tipped occupation code ${String(occupationCode)} for ${label} is not on the Treasury list.`,
+      });
+    } else if (!answeredOccupation && tips !== undefined && tips > 0) {
+      issues.push({
+        code: 'person.tippedOccupationCode.requiredWithTips',
+        path: `people[${index}].tippedOccupationCode`,
+        message: `Tipped occupation is required for ${label} because they receive tips. Enter 0 if it is not on the Treasury list.`,
       });
     }
 

@@ -150,6 +150,25 @@ describe('validate', () => {
     }
   });
 
+  it('asks for the occupation of someone with tips, and rejects negative tips', () => {
+    let draft = completeMarried();
+    draft = updatePerson(draft, draft.people[1].id, { tipIncome: 9000 });
+    expect(validate(draft).issues).toEqual([
+      {
+        code: 'person.tippedOccupationCode.requiredWithTips',
+        path: 'people[1].tippedOccupationCode',
+        message:
+          'Tipped occupation is required for adult 2 because they receive tips. Enter 0 if it is not on the Treasury list.',
+      },
+    ]);
+    draft = updatePerson(draft, draft.people[1].id, { tippedOccupationCode: 0 });
+    expect(validate(draft).ok).toBe(true);
+    draft = updatePerson(draft, draft.people[1].id, { tipIncome: -1 });
+    expect(validate(draft).issues.map((issue) => issue.code)).toEqual([
+      'person.tipIncome.negative',
+    ]);
+  });
+
   it('skips age requirement when requireAges is false', () => {
     let draft = createBlankDraft(2026);
     draft.state = 'CA';

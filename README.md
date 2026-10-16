@@ -92,11 +92,11 @@ for migrating from each app's local wizard.
   source (`pensionIncome`) is sent as private, and fields that share a
   variable are summed. Expenses set inputs too: `mortgageInterest` sets
   `home_mortgage_interest`, not `mortgage_interest`, a computed total the
-  interest deduction ignores (the tests keep it as a guarded total that no
-  field may set). Tips are taxed as wages in PolicyEngine US, so `tipIncome`
-  sets `tip_income` and is also added to `employment_income`; with a listed
-  `tippedOccupationCode` (`TIPPED_OCCUPATIONS`, from the final section 224
-  regulations) they qualify for the 2025-2028 tip deduction. Property tests check the
+  federal interest deduction ignores (the tests keep it as a guarded total
+  that no field may set). Tips are taxed as wages in PolicyEngine US, so
+  `tipIncome` sets `tip_income` and is also added to `employment_income`;
+  with a listed `tippedOccupationCode` (`TIPPED_OCCUPATIONS`, from the final
+  section 224 regulations) they can qualify for the 2025-2028 tip deduction. Property tests check the
   adapter against a snapshot of the PolicyEngine US variable graph (refresh it
   with `bun run regenerate-variable-graph`). Each total the adapter sets
   directly, and each variable that more than one field sets, is listed with

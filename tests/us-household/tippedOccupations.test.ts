@@ -75,7 +75,22 @@ describe('toTippedOccupationCode', () => {
   });
 
   it('reads anything else as not answered', () => {
-    for (const value of [undefined, null, '', ' ', 'abc', 100, 999, 101.5, -101, NaN, true]) {
+    for (const value of [
+      undefined,
+      null,
+      '',
+      ' ',
+      'abc',
+      '0x65',
+      '1.01e2',
+      '-0',
+      100,
+      999,
+      101.5,
+      -101,
+      NaN,
+      true,
+    ]) {
       expect(toTippedOccupationCode(value)).toBeUndefined();
     }
     expect(isTippedOccupationCode(0)).toBe(false);

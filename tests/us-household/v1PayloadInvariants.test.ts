@@ -84,13 +84,31 @@ const REVIEWED_SHARED_VARIABLES: Record<string, { fields: AmountField[]; reason:
       'A pension of unknown source is sent as private. Sending the taxable_pension_income ' +
       'total instead would leave both components at zero for the state rules that read them.',
   },
-  employment_income: {
-    fields: ['employmentIncome', 'tipIncome'],
+};
+
+/**
+ * Fields also added to a second variable, and why. Changing
+ * `INCOME_ALSO_ADDED_TO` fails the tests below until it is reviewed here.
+ */
+const REVIEWED_ALSO_ADDED: Record<string, { variable: string; reason: string }> = {
+  tipIncome: {
+    variable: 'employment_income',
     reason:
-      'PolicyEngine US taxes tips as wages (irs_employment_income and payroll_tax_gross_wages ' +
-      'read employment_income) and reads tip_income only for tip deductions and exclusions, ' +
-      'so tips go to both variables.',
+      'PolicyEngine US documents employment_income as wages including tips, and taxes ' +
+      'read it (irs_employment_income, payroll_tax_gross_wages). tip_income is read on its ' +
+      'own only by tip rules, so tips go to both variables.',
   },
+};
+
+/**
+ * Computed variables a field may set directly, beyond the totals above that
+ * the Simulation moves onto inputs. Mapping a field to another computed
+ * variable fails the tests below until it is reviewed here.
+ */
+const REVIEWED_COMPUTED_FIELDS: Record<string, string> = {
+  ssi:
+    'Reported SSI; sent for every person or no one (see the SSI properties), since an ' +
+    'input for one person would stop the model computing SSI for everyone else.',
 };
 
 /**
@@ -184,8 +202,11 @@ function isEntered(person: USPersonDraft, field: DraftField): boolean {
   return amountOf(value) !== undefined;
 }
 
-/** A listed occupation code or 0, read like an amount; anything else is unset. */
+/** A listed occupation code or 0; strings must be decimal digits. */
 function occupationCodeOf(value: unknown): number | undefined {
+  if (typeof value === 'string' && !/^\s*\d+\s*$/.test(value)) {
+    return undefined;
+  }
   const code = amountOf(value);
   if (code === 0) {
     return 0;
@@ -251,7 +272,7 @@ const occupationCodeArb = fc.oneof(
   { weight: 4, arbitrary: fc.constantFrom(...TIPPED_OCCUPATIONS.map((o) => o.code)) },
   { weight: 2, arbitrary: fc.constantFrom(0, -0) },
   { weight: 2, arbitrary: fc.constantFrom(1, 100, 111, 999, -101, 101.5, Number.NaN) },
-  { weight: 1, arbitrary: fc.constantFrom('101', '0', '', 'abc', '999') },
+  { weight: 1, arbitrary: fc.constantFrom('101', ' 102 ', '0', '', 'abc', '999', '0x65', '1e2', '-0') },
 );
 
 const personArb = fc
@@ -370,8 +391,12 @@ describe('toV1HouseholdPayload invariants', () => {
   });
 
   it('maps several fields to one variable only when it is reviewed', () => {
+    // Each field's own variable; the reviewed second variables are below.
     const fieldsByVariable = new Map<string, string[]>();
-    for (const [field, variable] of AMOUNT_TO_VARIABLES) {
+    for (const [field, variable] of [
+      ...Object.entries(INCOME_TO_VARIABLE),
+      ...Object.entries(EXPENSE_TO_VARIABLE),
+    ]) {
       fieldsByVariable.set(variable, [...(fieldsByVariable.get(variable) ?? []), field]);
     }
     const shared = Object.fromEntries(
@@ -386,6 +411,30 @@ describe('toV1HouseholdPayload invariants', () => {
       ]),
     );
     expect(shared).toEqual(reviewed);
+  });
+
+  it('adds a field to a second variable only when it is reviewed', () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(REVIEWED_ALSO_ADDED).map(([field, { variable }]) => [field, variable]),
+      ),
+    ).toEqual(INCOME_ALSO_ADDED_TO);
+  });
+
+  it('maps every field to an input variable, or a reviewed computed one', () => {
+    const fieldVariables = new Set([
+      ...Object.values(FLAG_TO_VARIABLE),
+      ...AMOUNT_VARIABLES,
+      TIPPED_OCCUPATION_VARIABLE,
+    ]);
+    for (const variable of fieldVariables) {
+      const reviewed =
+        variable in REVIEWED_PARTIAL_COMPUTED || variable in REVIEWED_COMPUTED_FIELDS;
+      expect(
+        nodeOf(variable).isInputVariable || reviewed,
+        `${variable} is computed: ${REGENERATE_HINT}`,
+      ).toBe(true);
+    }
   });
 
   it('carries every entered amount other than SSI into its variables', () => {
@@ -613,11 +662,11 @@ describe('toV1HouseholdPayload invariants', () => {
     );
   });
 
-  it('flags in validate() exactly the negative expenses', () => {
+  it('flags in validate() exactly the negative expenses and tips', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         const expected = draft.people.flatMap((person, index) =>
-          EXPENSE_FIELDS.flatMap((field) => {
+          [...EXPENSE_FIELDS, 'tipIncome' as const].flatMap((field) => {
             const amount = amountOf(person[field]);
             return amount !== undefined && amount < 0 ? [`people[${index}].${field}`] : [];
           }),
@@ -625,6 +674,29 @@ describe('toV1HouseholdPayload invariants', () => {
         const result = validate(draft);
         const flagged = (result.ok ? [] : result.issues)
           .filter((issue) => /^person\.[A-Za-z]+\.negative$/.test(issue.code))
+          .map((issue) => issue.path);
+        expect(flagged).toEqual(expected);
+      }),
+    );
+  });
+
+  it('asks in validate() for the occupation exactly when tips have no answer', () => {
+    fc.assert(
+      fc.property(draftArb, (draft) => {
+        const expected = draft.people.flatMap((person, index) => {
+          const tips = amountOf(person.tipIncome);
+          const value = person.tippedOccupationCode as unknown;
+          const answered =
+            value !== undefined &&
+            value !== null &&
+            !(typeof value === 'string' && value.trim() === '');
+          return tips !== undefined && tips > 0 && !answered
+            ? [`people[${index}].tippedOccupationCode`]
+            : [];
+        });
+        const result = validate(draft);
+        const flagged = (result.ok ? [] : result.issues)
+          .filter((issue) => issue.code === 'person.tippedOccupationCode.requiredWithTips')
           .map((issue) => issue.path);
         expect(flagged).toEqual(expected);
       }),

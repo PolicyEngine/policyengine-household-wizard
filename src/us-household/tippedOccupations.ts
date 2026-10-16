@@ -131,12 +131,12 @@ export function isTippedOccupationCode(code: unknown): code is number {
 
 /**
  * An entered occupation code as a number the V1 adapter sends: a listed code,
- * or 0 for "not a listed occupation". Numeric strings are read as numbers.
- * Anything else, including codes the table does not list, reads as not
- * answered, so a stray value cannot claim the deduction.
+ * or 0 for "not a listed occupation". Strings of decimal digits are read as
+ * numbers. Anything else, including codes the table does not list, reads as
+ * not answered, so a stray value cannot claim the deduction.
  */
 export function toTippedOccupationCode(value: unknown): number | undefined {
-  const code = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  const code = typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value;
   if (code === NOT_A_TIPPED_OCCUPATION) {
     // Also reads -0 as 0.
     return NOT_A_TIPPED_OCCUPATION;

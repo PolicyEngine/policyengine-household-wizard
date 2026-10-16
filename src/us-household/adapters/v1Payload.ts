@@ -148,8 +148,9 @@ export const COLLEGE_MIN_AGE = 18;
 /**
  * An entered 0 in `ssiAmount` is sent as this variable, set to false. It is an
  * input (default true), so it sets that person's SSI to 0 without affecting
- * anyone else. In policyengine-us 1.764.6 only `ssi` reads it; later versions
- * also read it in a county General Relief rule.
+ * anyone else. In policyengine-us 1.764.6 only `ssi` reads it. In 2.x, state
+ * SSI supplements and a county General Relief rule read it too, so a 0 also
+ * means no state supplement for that person.
  */
 export const SSI_TAKE_UP_VARIABLE = 'takes_up_ssi_if_eligible';
 
@@ -214,13 +215,16 @@ export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>>
  * that variable. Exported for tests and tooling; not part of the package entry
  * points.
  *
- * PolicyEngine US counts tips as part of wages: income tax and payroll tax
- * read `employment_income` (through `irs_employment_income` and
- * `payroll_tax_gross_wages`), and nothing adds `tip_income` to income. Its
- * qualified tips deduction and Georgia's cash tip exclusion read `tip_income`.
- * So `tipIncome` is sent as `tip_income` and also added to
+ * PolicyEngine US counts tips as part of wages: `employment_income` is wages
+ * "including tips and commissions", and income and payroll taxes read it
+ * (through `irs_employment_income` and `payroll_tax_gross_wages`). A few rules
+ * read `tip_income` on its own: the qualified tips deduction, Georgia's cash
+ * tip exclusion, and Washington's long-term care premium (which subtracts it
+ * from wages). So `tipIncome` is sent as `tip_income` and also added to
  * `employment_income`; without the second, tips would be deducted but never
- * taxed.
+ * taxed. One rule departs from this convention: Florida School Readiness
+ * adds `tip_income` to `employment_income` and so counts tips twice
+ * (PolicyEngine/policyengine-us#10262).
  */
 export const INCOME_ALSO_ADDED_TO: Readonly<Partial<Record<keyof USPersonIncomes, string>>> = {
   tipIncome: 'employment_income',
@@ -232,8 +236,9 @@ export const INCOME_ALSO_ADDED_TO: Readonly<Partial<Record<keyof USPersonIncomes
  *
  * `mortgageInterest` sets `home_mortgage_interest`, the input. PolicyEngine US
  * computes `mortgage_interest` as the sum of deductible and non-deductible
- * interest, and its interest deduction reads the input, so an amount sent as
- * `mortgage_interest` changes no deduction.
+ * interest, and its federal interest deduction reads the input, so an amount
+ * sent as `mortgage_interest` changes no federal deduction. (North Carolina,
+ * Hawaii and Alabama rules read the computed total, which includes the input.)
  */
 export const EXPENSE_TO_VARIABLE: Readonly<Record<keyof USPersonExpenses, string>> = {
   charitableCashDonations: 'charitable_cash_donations',
@@ -244,6 +249,9 @@ export const EXPENSE_TO_VARIABLE: Readonly<Record<keyof USPersonExpenses, string
 /**
  * `tippedOccupationCode` is sent as this variable, an integer input whose
  * default 0 means no listed occupation. Only listed codes and 0 are sent.
+ * Amounts are sent as entered and checked by `validate()`, but an unlisted
+ * code is dropped: the model reads any code above 0 as a listed occupation,
+ * so a stray one would claim the deduction.
  */
 export const TIPPED_OCCUPATION_VARIABLE = 'treasury_tipped_occupation_code';
 

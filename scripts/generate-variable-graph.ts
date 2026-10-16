@@ -39,7 +39,7 @@ const OTHER_PERSON_VARIABLES = [
  * Computed totals that apps have set by mistake. The adapter never sends them;
  * the snapshot keeps them so the tests can check they are still totals.
  * `mortgage_interest` adds deductible and non-deductible interest, and the
- * interest deduction ignores an input on it (GiveCalc wrote the user's mortgage
+ * federal interest deduction ignores an input on it (GiveCalc wrote the user's mortgage
  * interest there until PolicyEngine/givecalc#85).
  */
 export const GUARDED_TOTALS = ['mortgage_interest'];
