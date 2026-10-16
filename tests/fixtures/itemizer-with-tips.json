@@ -1,0 +1,38 @@
+{
+  "name": "married itemizers with tips, investments and a mortgage in NYC",
+  "draft": {
+    "state": "NY",
+    "county": "KINGS_COUNTY_NY",
+    "zip": null,
+    "maritalStatus": "married",
+    "year": 2026,
+    "people": [
+      {
+        "id": "adult-1",
+        "kind": "adult",
+        "age": 41,
+        "employmentIncome": 140000,
+        "dividendIncome": 3000,
+        "nonQualifiedDividendIncome": 800,
+        "shortTermCapitalGains": -1500,
+        "longTermCapitalGains": 12000,
+        "charitableCashDonations": 15000,
+        "mortgageInterest": 22000,
+        "realEstateTaxes": 11000
+      },
+      {
+        "id": "adult-2",
+        "kind": "adult",
+        "age": 38,
+        "employmentIncome": 26000,
+        "tipIncome": 14000,
+        "tippedOccupationCode": 102
+      },
+      {
+        "id": "dependent-1",
+        "kind": "dependent",
+        "age": 7
+      }
+    ]
+  }
+}

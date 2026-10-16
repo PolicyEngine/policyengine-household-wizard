@@ -1,12 +1,20 @@
 import { toAmount } from './amount';
 import { isUSStateCode } from './states';
 import { isCountyCode } from './counties';
+import { toTippedOccupationCode } from './tippedOccupations';
 import type {
   USHouseholdDraft,
   USPersonDraft,
+  USPersonExpenses,
   ValidationIssue,
   ValidationResult,
 } from './types';
+
+const EXPENSE_LABELS: Readonly<Record<keyof USPersonExpenses, string>> = {
+  charitableCashDonations: 'Charitable cash donations',
+  mortgageInterest: 'Mortgage interest',
+  realEstateTaxes: 'Real estate taxes',
+};
 
 /**
  * "adult 2" or "dependent 1": people are numbered within their kind, in draft
@@ -107,6 +115,49 @@ export function validate(
         code: 'person.age.required',
         path: `people[${index}].age`,
         message: `Age is required for ${label}.`,
+      });
+    }
+
+    for (const [field, fieldLabel] of Object.entries(EXPENSE_LABELS)) {
+      const amount = toAmount(person[field as keyof USPersonExpenses]);
+      if (amount !== undefined && amount < 0) {
+        issues.push({
+          code: `person.${field}.negative`,
+          path: `people[${index}].${field}`,
+          message: `${fieldLabel} for ${label} cannot be negative.`,
+        });
+      }
+    }
+
+    const tips = toAmount(person.tipIncome);
+    if (tips !== undefined && tips < 0) {
+      issues.push({
+        code: 'person.tipIncome.negative',
+        path: `people[${index}].tipIncome`,
+        message: `Tips for ${label} cannot be negative.`,
+      });
+    }
+
+    // The V1 adapter sends only listed codes and 0, so any other answer would
+    // be dropped silently. Without an answer, the model reads 0 and tips get
+    // no deduction; apps that do not ask about the deduction can treat
+    // `person.tippedOccupationCode.requiredWithTips` as a warning.
+    const occupationCode = person.tippedOccupationCode as unknown;
+    const answeredOccupation =
+      occupationCode !== undefined &&
+      occupationCode !== null &&
+      !(typeof occupationCode === 'string' && occupationCode.trim() === '');
+    if (answeredOccupation && toTippedOccupationCode(occupationCode) === undefined) {
+      issues.push({
+        code: 'person.tippedOccupationCode.invalid',
+        path: `people[${index}].tippedOccupationCode`,
+        message: `Tipped occupation code ${String(occupationCode)} for ${label} is not on the Treasury list.`,
+      });
+    } else if (!answeredOccupation && tips !== undefined && tips > 0) {
+      issues.push({
+        code: 'person.tippedOccupationCode.requiredWithTips',
+        path: `people[${index}].tippedOccupationCode`,
+        message: `Tipped occupation is required for ${label} because they receive tips. Enter 0 if it is not on the Treasury list.`,
       });
     }
 

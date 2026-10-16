@@ -2,9 +2,11 @@ export type {
   USHouseholdDraft,
   USMaritalStatus,
   USPersonDraft,
+  USPersonExpenses,
   USPersonFlags,
   USPersonIncomes,
   USPersonKind,
+  USPersonOccupation,
   ValidationIssue,
   ValidationResult,
 } from './types';
@@ -33,6 +35,15 @@ export {
   getStateFromZip,
   type USState,
 } from './states';
+
+export {
+  NOT_A_TIPPED_OCCUPATION,
+  TIPPED_OCCUPATIONS,
+  getTippedOccupation,
+  isTippedOccupationCode,
+  toTippedOccupationCode,
+  type TippedOccupation,
+} from './tippedOccupations';
 
 export {
   getCountiesByState,

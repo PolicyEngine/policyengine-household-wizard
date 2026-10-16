@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPerson, createBlankDraft } from '@/us-household/draft';
+import { addPerson, createBlankDraft, updatePerson } from '@/us-household/draft';
 import { isComplete, validate } from '@/us-household/validate';
 
 function completeMarried() {
@@ -114,6 +114,59 @@ describe('validate', () => {
       expect(validate(couple(0, undefined)).ok).toBe(true);
       expect(validate(couple(undefined, undefined)).ok).toBe(true);
     });
+  });
+
+  it('flags negative expenses and leaves zero and positive ones alone', () => {
+    let draft = completeMarried();
+    draft = updatePerson(draft, draft.people[0].id, {
+      mortgageInterest: -1,
+      realEstateTaxes: 0,
+      charitableCashDonations: 2000,
+    });
+    const result = validate(draft);
+    expect(result.ok).toBe(false);
+    expect(result.issues).toEqual([
+      {
+        code: 'person.mortgageInterest.negative',
+        path: 'people[0].mortgageInterest',
+        message: 'Mortgage interest for adult 1 cannot be negative.',
+      },
+    ]);
+  });
+
+  it('flags a tipped occupation code that is not on the Treasury list', () => {
+    let draft = completeMarried();
+    draft = updatePerson(draft, draft.people[0].id, { tippedOccupationCode: 999 });
+    expect(validate(draft).issues).toEqual([
+      {
+        code: 'person.tippedOccupationCode.invalid',
+        path: 'people[0].tippedOccupationCode',
+        message: 'Tipped occupation code 999 for adult 1 is not on the Treasury list.',
+      },
+    ]);
+    for (const accepted of [0, 101, 810, undefined]) {
+      draft = updatePerson(draft, draft.people[0].id, { tippedOccupationCode: accepted });
+      expect(validate(draft).ok).toBe(true);
+    }
+  });
+
+  it('asks for the occupation of someone with tips, and rejects negative tips', () => {
+    let draft = completeMarried();
+    draft = updatePerson(draft, draft.people[1].id, { tipIncome: 9000 });
+    expect(validate(draft).issues).toEqual([
+      {
+        code: 'person.tippedOccupationCode.requiredWithTips',
+        path: 'people[1].tippedOccupationCode',
+        message:
+          'Tipped occupation is required for adult 2 because they receive tips. Enter 0 if it is not on the Treasury list.',
+      },
+    ]);
+    draft = updatePerson(draft, draft.people[1].id, { tippedOccupationCode: 0 });
+    expect(validate(draft).ok).toBe(true);
+    draft = updatePerson(draft, draft.people[1].id, { tipIncome: -1 });
+    expect(validate(draft).issues.map((issue) => issue.code)).toEqual([
+      'person.tipIncome.negative',
+    ]);
   });
 
   it('skips age requirement when requireAges is false', () => {

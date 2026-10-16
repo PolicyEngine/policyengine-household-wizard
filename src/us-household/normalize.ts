@@ -1,5 +1,6 @@
 import { resolveCountyCode } from './counties';
 import { getStateFromZip, isUSStateCode } from './states';
+import { toTippedOccupationCode } from './tippedOccupations';
 import { DEFAULT_HOUSEHOLD_YEAR, createBlankDraft } from './draft';
 import type {
   USHouseholdDraft,
@@ -74,6 +75,23 @@ interface LegacyPerson {
   public_pension_income_annual?: number;
   privatePensionIncome?: number;
   private_pension_income_annual?: number;
+  tipIncome?: number;
+  tip_income?: number;
+  nonQualifiedDividendIncome?: number;
+  non_qualified_dividend_income?: number;
+  shortTermCapitalGains?: number;
+  short_term_capital_gains?: number;
+  longTermCapitalGains?: number;
+  long_term_capital_gains?: number;
+  charitableCashDonations?: number;
+  charitable_cash_donations?: number;
+  mortgageInterest?: number;
+  home_mortgage_interest?: number;
+  mortgage_interest?: number;
+  realEstateTaxes?: number;
+  real_estate_taxes?: number;
+  tippedOccupationCode?: number | string;
+  treasury_tipped_occupation_code?: number | string;
 }
 
 interface LegacyDraftShape {
@@ -165,6 +183,28 @@ function normalizePerson(
     ),
     privatePensionIncome: coerceNumber(
       legacy.privatePensionIncome ?? legacy.private_pension_income_annual,
+    ),
+    tipIncome: coerceNumber(legacy.tipIncome ?? legacy.tip_income),
+    nonQualifiedDividendIncome: coerceNumber(
+      legacy.nonQualifiedDividendIncome ?? legacy.non_qualified_dividend_income,
+    ),
+    shortTermCapitalGains: coerceNumber(
+      legacy.shortTermCapitalGains ?? legacy.short_term_capital_gains,
+    ),
+    longTermCapitalGains: coerceNumber(
+      legacy.longTermCapitalGains ?? legacy.long_term_capital_gains,
+    ),
+    charitableCashDonations: coerceNumber(
+      legacy.charitableCashDonations ?? legacy.charitable_cash_donations,
+    ),
+    // A legacy `mortgage_interest` is the interest the user paid, written to
+    // PolicyEngine US's computed total by mistake; it belongs in the input.
+    mortgageInterest: coerceNumber(
+      legacy.mortgageInterest ?? legacy.home_mortgage_interest ?? legacy.mortgage_interest,
+    ),
+    realEstateTaxes: coerceNumber(legacy.realEstateTaxes ?? legacy.real_estate_taxes),
+    tippedOccupationCode: toTippedOccupationCode(
+      legacy.tippedOccupationCode ?? legacy.treasury_tipped_occupation_code,
     ),
   };
 }

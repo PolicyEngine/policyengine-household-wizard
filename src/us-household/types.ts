@@ -34,11 +34,27 @@ export interface USPersonFlags {
 /**
  * Annual amounts in dollars. Fields are additive, so an amount belongs in
  * exactly one field. Each field sets its own PolicyEngine US variable, except
- * that `pensionIncome` and `privatePensionIncome` share one and are summed.
+ * that `pensionIncome` and `privatePensionIncome` share one and are summed,
+ * and `tipIncome` is also added to wages.
  */
 export interface USPersonIncomes {
-  /** Wages and salaries; "employment_income" in PolicyEngine US. */
+  /**
+   * Wages and salaries, not counting tips entered in `tipIncome`;
+   * "employment_income" in PolicyEngine US.
+   */
   employmentIncome?: number;
+  /**
+   * Tips received as an employee; "tip_income" in PolicyEngine US.
+   * PolicyEngine US counts tips as part of wages (`employment_income` is
+   * wages "including tips and commissions"), and income and payroll taxes
+   * read `employment_income`. A few rules read `tip_income` on its own, such
+   * as the federal deduction for qualified tips (2025-2028) and Georgia's cash
+   * tip exclusion. So the V1 adapter sends these tips both as `tip_income` and
+   * added to `employment_income`. Tips can count for the deduction only with a
+   * listed `tippedOccupationCode`. A self-employed worker's tips belong in
+   * `selfEmploymentIncome`, which the adapter does not send as `tip_income`.
+   */
+  tipIncome?: number;
   /** "self_employment_income" in PolicyEngine US. */
   selfEmploymentIncome?: number;
   /**
@@ -84,8 +100,28 @@ export interface USPersonIncomes {
    * "taxable_private_pension_income" in PolicyEngine US.
    */
   privatePensionIncome?: number;
-  /** "qualified_dividend_income" in PolicyEngine US. */
+  /** Qualified dividends; "qualified_dividend_income" in PolicyEngine US. */
   dividendIncome?: number;
+  /**
+   * Ordinary dividends that are not qualified;
+   * "non_qualified_dividend_income" in PolicyEngine US. Form 1099-DIV's
+   * ordinary dividends (box 1a) are the sum of this and `dividendIncome`
+   * (box 1b).
+   */
+  nonQualifiedDividendIncome?: number;
+  /**
+   * Net gains on assets held one year or less, negative for a net loss;
+   * "short_term_capital_gains" in PolicyEngine US.
+   */
+  shortTermCapitalGains?: number;
+  /**
+   * Net gains on assets held more than one year, negative for a net loss;
+   * "long_term_capital_gains" in PolicyEngine US. That variable is computed as
+   * gains before behavioral responses plus the response, and PolicyEngine US's
+   * Simulation moves an input on it onto
+   * `long_term_capital_gains_before_response`, as it does for wages.
+   */
+  longTermCapitalGains?: number;
   taxableInterestIncome?: number;
   rentalIncome?: number;
   unemploymentCompensation?: number;
@@ -93,7 +129,48 @@ export interface USPersonIncomes {
   miscellaneousIncome?: number;
 }
 
-export interface USPersonDraft extends USPersonFlags, USPersonIncomes {
+/**
+ * Annual amounts paid, in dollars, that PolicyEngine US deducts or credits.
+ * Each field sets one PolicyEngine US input variable. Federal deductions sum
+ * the tax unit's amounts, so an app that asks about a shared expense once can
+ * put it on one adult, ideally the one who pays it or owns the home. Some
+ * state rules read a person's own amount: Montana caps real estate taxes per
+ * person, and homestead or elderly property tax reductions in Kentucky, Ohio,
+ * South Carolina, Mississippi and Tennessee read the owner's (Kentucky) or the
+ * head's or spouse's real estate taxes.
+ */
+export interface USPersonExpenses {
+  /** Gifts of cash to charity; "charitable_cash_donations" in PolicyEngine US. */
+  charitableCashDonations?: number;
+  /**
+   * Interest paid on a home mortgage; "home_mortgage_interest" in PolicyEngine
+   * US. Not "mortgage_interest": that is a computed total of deductible and
+   * non-deductible interest, and the federal interest deduction ignores an
+   * input on it.
+   */
+  mortgageInterest?: number;
+  /** Real estate (property) taxes paid; "real_estate_taxes" in PolicyEngine US. */
+  realEstateTaxes?: number;
+}
+
+/** Work details that rules read alongside income. */
+export interface USPersonOccupation {
+  /**
+   * Treasury Tipped Occupation Code for the occupation in which the person
+   * received `tipIncome` (see `TIPPED_OCCUPATIONS`), or 0 if it is not a
+   * listed occupation; "treasury_tipped_occupation_code" in PolicyEngine US.
+   * Only tips from a listed occupation qualify for the federal deduction for
+   * qualified tips. Leave it unset if the user was not asked: PolicyEngine US
+   * then reads 0, so tips get no deduction.
+   */
+  tippedOccupationCode?: number;
+}
+
+export interface USPersonDraft
+  extends USPersonFlags,
+    USPersonIncomes,
+    USPersonExpenses,
+    USPersonOccupation {
   /** Stable identifier — used as the person key in the API payload. */
   id: string;
   kind: USPersonKind;

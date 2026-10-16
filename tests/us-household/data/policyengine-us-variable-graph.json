@@ -1,11 +1,25 @@
 {
   "source": "https://api.policyengine.org/us/metadata",
-  "policyengineUsVersion": "1.764.6",
+  "policyengineUsVersion": "2.2.1",
   "variables": {
     "age": {
       "entity": "person",
       "isInputVariable": true,
       "defaultValue": 40,
+      "adds": [],
+      "subtracts": []
+    },
+    "capital_gains_behavioral_response": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "charitable_cash_donations": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
@@ -20,6 +34,13 @@
       "entity": "household",
       "isInputVariable": false,
       "defaultValue": "UNKNOWN",
+      "adds": [],
+      "subtracts": []
+    },
+    "deductible_mortgage_interest": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
       "adds": [],
       "subtracts": []
     },
@@ -43,6 +64,13 @@
     "employment_income_behavioral_response": {
       "entity": "person",
       "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "home_mortgage_interest": {
+      "entity": "person",
+      "isInputVariable": true,
       "defaultValue": 0,
       "adds": [],
       "subtracts": []
@@ -89,6 +117,23 @@
       "adds": [],
       "subtracts": []
     },
+    "long_term_capital_gains": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [
+        "capital_gains_behavioral_response",
+        "long_term_capital_gains_before_response"
+      ],
+      "subtracts": []
+    },
+    "long_term_capital_gains_before_response": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
     "miscellaneous_income": {
       "entity": "person",
       "isInputVariable": true,
@@ -96,7 +141,38 @@
       "adds": [],
       "subtracts": []
     },
+    "mortgage_interest": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [
+        "deductible_mortgage_interest",
+        "non_deductible_mortgage_interest"
+      ],
+      "subtracts": []
+    },
+    "non_deductible_mortgage_interest": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "non_qualified_dividend_income": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
     "qualified_dividend_income": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "real_estate_taxes": {
       "entity": "person",
       "isInputVariable": true,
       "defaultValue": 0,
@@ -134,6 +210,13 @@
       "adds": [],
       "subtracts": []
     },
+    "short_term_capital_gains": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
     "social_security_disability": {
       "entity": "person",
       "isInputVariable": true,
@@ -149,6 +232,15 @@
       "subtracts": []
     },
     "ssi": {
+      "entity": "person",
+      "isInputVariable": false,
+      "defaultValue": 0,
+      "adds": [
+        "ssi_if_takes_up"
+      ],
+      "subtracts": []
+    },
+    "ssi_if_takes_up": {
       "entity": "person",
       "isInputVariable": false,
       "defaultValue": 0,
@@ -184,6 +276,20 @@
       "subtracts": []
     },
     "taxable_public_pension_income": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "tip_income": {
+      "entity": "person",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
+    "treasury_tipped_occupation_code": {
       "entity": "person",
       "isInputVariable": true,
       "defaultValue": 0,
