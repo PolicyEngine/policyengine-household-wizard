@@ -64,7 +64,13 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   for every person or no one (policyengine-core stores one array per variable
   for a whole entity, so a partial input overrides everyone else's formula);
   the invariant tests enforce this, with reviewed exceptions in
-  `REVIEWED_PARTIAL_COMPUTED`. Then run
+  `REVIEWED_PARTIAL_COMPUTED`. Amounts paid go in `USPersonExpenses` and
+  `EXPENSE_TO_VARIABLE`; an income the model also counts inside another
+  variable (tips inside wages) goes in `INCOME_ALSO_ADDED_TO`, with a
+  `REVIEWED_SHARED_VARIABLES` entry. A computed total that apps have set by
+  mistake (`mortgage_interest`) goes in `GUARDED_TOTALS` in
+  `scripts/generate-variable-graph.ts`, so the tests check that it is still a
+  total and that no field sets it. Then run
   `bun run regenerate-variable-graph` so the invariant tests see the new
   variable.
 - New country (e.g. UK) → mirror the structure under

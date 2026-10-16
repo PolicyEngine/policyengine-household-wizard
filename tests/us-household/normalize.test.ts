@@ -127,6 +127,47 @@ describe('normalizeLegacyDraft', () => {
     });
   });
 
+  it('keeps tips, investments, expenses and the tipped occupation', () => {
+    const draft = normalizeLegacyDraft({
+      state: 'NV',
+      marital_status: 'UNMARRIED',
+      people: [
+        {
+          kind: 'adult',
+          age: 30,
+          tipIncome: 9000,
+          tippedOccupationCode: '101',
+          non_qualified_dividend_income: 200,
+          short_term_capital_gains: -400,
+          longTermCapitalGains: 5000,
+          charitable_cash_donations: 1000,
+          home_mortgage_interest: 7000,
+          real_estate_taxes: 3000,
+        },
+      ],
+    });
+    expect(draft.people[0]).toMatchObject({
+      tipIncome: 9000,
+      tippedOccupationCode: 101,
+      nonQualifiedDividendIncome: 200,
+      shortTermCapitalGains: -400,
+      longTermCapitalGains: 5000,
+      charitableCashDonations: 1000,
+      mortgageInterest: 7000,
+      realEstateTaxes: 3000,
+    });
+  });
+
+  it("reads a legacy mortgage_interest as the interest paid, and drops unlisted occupations", () => {
+    const draft = normalizeLegacyDraft({
+      state: 'TX',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 50, mortgage_interest: 12000, tippedOccupationCode: 999 }],
+    });
+    expect(draft.people[0].mortgageInterest).toBe(12000);
+    expect(draft.people[0].tippedOccupationCode).toBeUndefined();
+  });
+
   it("reads cliff-watch's default SSI of 0 as not entered", () => {
     // cliff-watch writes ssi_amount 0 for everyone and sends SSI only when it
     // is positive. Read as an entered 0, it would stop the model from

@@ -7,6 +7,7 @@ import student from './student.json' with { type: 'json' };
 import countyCase from './county-case.json' with { type: 'json' };
 import retireeWithSsdi from './retiree-with-ssdi.json' with { type: 'json' };
 import retireeWithPensions from './retiree-with-pensions.json' with { type: 'json' };
+import itemizerWithTips from './itemizer-with-tips.json' with { type: 'json' };
 
 import { isComplete } from '@/us-household/validate';
 import { normalizeLegacyDraft } from '@/us-household/normalize';
@@ -28,6 +29,7 @@ const FIXTURES: Fixture[] = [
   countyCase as Fixture,
   retireeWithSsdi as Fixture,
   retireeWithPensions as Fixture,
+  itemizerWithTips as Fixture,
 ];
 
 describe('US household fixtures', () => {

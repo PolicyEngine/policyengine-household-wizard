@@ -235,6 +235,91 @@ describe('toV1HouseholdPayload', () => {
     });
   });
 
+  it('sends tips as tip_income and adds them to wages', () => {
+    // PolicyEngine US taxes tips through employment_income and reads
+    // tip_income only for the tip deduction, so tips sent only as tip_income
+    // would be deducted but never taxed.
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      employmentIncome: 30000,
+      tipIncome: 12000,
+      tippedOccupationCode: 102,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 30 },
+      is_tax_unit_dependent: { '2026': false },
+      employment_income: { '2026': 42000 },
+      tip_income: { '2026': 12000 },
+      treasury_tipped_occupation_code: { '2026': 102 },
+    });
+  });
+
+  it('sends tips without wages as both tips and wages', () => {
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      employmentIncome: undefined,
+      tipIncome: 8000,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 30 },
+      is_tax_unit_dependent: { '2026': false },
+      employment_income: { '2026': 8000 },
+      tip_income: { '2026': 8000 },
+    });
+  });
+
+  it('sends a listed occupation code or 0, and drops anything else', () => {
+    const code = (tippedOccupationCode: unknown) =>
+      toV1HouseholdPayload(
+        updatePerson(singleAdult(), 'adult-1', {
+          tippedOccupationCode: tippedOccupationCode as number,
+        }),
+      ).data.people['adult-1'].treasury_tipped_occupation_code;
+    expect(code(810)).toEqual({ '2026': 810 });
+    expect(code('603')).toEqual({ '2026': 603 });
+    expect(code(0)).toEqual({ '2026': 0 });
+    expect(code(-0)).toEqual({ '2026': 0 });
+    for (const dropped of [undefined, null, '', 100, 999, 101.5, -101, 'abc']) {
+      expect(code(dropped)).toBeUndefined();
+    }
+  });
+
+  it('sends dividends and capital gains to their own variables, losses included', () => {
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      dividendIncome: 4000,
+      nonQualifiedDividendIncome: 1500,
+      shortTermCapitalGains: -2000,
+      longTermCapitalGains: 25000,
+    });
+    expect(toV1HouseholdPayload(draft).data.people['adult-1']).toEqual({
+      age: { '2026': 30 },
+      is_tax_unit_dependent: { '2026': false },
+      employment_income: { '2026': 50000 },
+      qualified_dividend_income: { '2026': 4000 },
+      non_qualified_dividend_income: { '2026': 1500 },
+      short_term_capital_gains: { '2026': -2000 },
+      long_term_capital_gains: { '2026': 25000 },
+    });
+  });
+
+  it('sends mortgage interest as home_mortgage_interest, never the mortgage_interest total', () => {
+    // GiveCalc sent mortgage_interest, which PolicyEngine US computes as
+    // deductible plus non-deductible interest; the deduction ignored it.
+    const draft = updatePerson(singleAdult(), 'adult-1', {
+      charitableCashDonations: 5000,
+      mortgageInterest: 18000,
+      realEstateTaxes: 9000,
+    });
+    const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+    expect(person).not.toHaveProperty('mortgage_interest');
+    expect(person).toEqual({
+      age: { '2026': 30 },
+      is_tax_unit_dependent: { '2026': false },
+      employment_income: { '2026': 50000 },
+      charitable_cash_donations: { '2026': 5000 },
+      home_mortgage_interest: { '2026': 18000 },
+      real_estate_taxes: { '2026': 9000 },
+    });
+  });
+
   it('skips an amount that is not a finite number instead of summing it', () => {
     // Summing would turn NaN + 12000 into NaN, which JSON sends as null, and
     // the valid private pension would be lost.

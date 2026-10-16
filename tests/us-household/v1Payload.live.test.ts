@@ -175,6 +175,65 @@ describe.skipIf(process.env.POLICYENGINE_LIVE_API !== '1')(
       expect(unknownSource.taxUnit.mn_public_pension_subtraction).toBe(0);
     }, 60_000);
 
+    it('taxes tips as wages and deducts them only for a listed occupation', async () => {
+      const tipped = (tippedOccupationCode: number) =>
+        household('NV', 'single', [
+          { kind: 'adult', age: 30, employmentIncome: 30000, tipIncome: 12000, tippedOccupationCode },
+        ]);
+      const personOutputs = ['employment_income', 'tip_income', 'irs_employment_income'];
+      const taxUnitOutputs = ['tip_income_deduction'];
+      const listed = await calculateDraft(tipped(102), personOutputs, taxUnitOutputs);
+      const unlisted = await calculateDraft(tipped(0), personOutputs, taxUnitOutputs);
+      expect(listed.people['adult-1']).toEqual({
+        employment_income: 42000,
+        tip_income: 12000,
+        irs_employment_income: 42000,
+      });
+      expect(listed.taxUnit.tip_income_deduction).toBe(12000);
+      expect(unlisted.taxUnit.tip_income_deduction).toBe(0);
+    }, 60_000);
+
+    it('keeps entered capital gains and losses, before and after responses', async () => {
+      const { person } = await calculate(
+        'TX',
+        { shortTermCapitalGains: -2000, longTermCapitalGains: 25000 },
+        [
+          'short_term_capital_gains',
+          'long_term_capital_gains',
+          'long_term_capital_gains_before_response',
+        ],
+      );
+      expect(person).toEqual({
+        short_term_capital_gains: -2000,
+        long_term_capital_gains: 25000,
+        long_term_capital_gains_before_response: 25000,
+      });
+    }, 60_000);
+
+    it("counts an itemizer's mortgage interest, property tax and gifts", async () => {
+      // GiveCalc sent mortgage interest as the mortgage_interest total, which
+      // the deduction ignored; home_mortgage_interest reaches it.
+      const itemizer = (mortgageInterest: number | undefined) =>
+        household('TX', 'married', [
+          {
+            kind: 'adult',
+            age: 45,
+            employmentIncome: 200000,
+            mortgageInterest,
+            realEstateTaxes: 12000,
+            charitableCashDonations: 10000,
+          },
+          { kind: 'adult', age: 45 },
+        ]);
+      const outputs = ['interest_deduction', 'charitable_deduction', 'income_tax'];
+      const withMortgage = await calculateDraft(itemizer(30000), [], outputs);
+      const withoutMortgage = await calculateDraft(itemizer(undefined), [], outputs);
+      expect(withMortgage.taxUnit.interest_deduction).toBe(30000);
+      expect(withoutMortgage.taxUnit.interest_deduction).toBe(0);
+      expect(withMortgage.taxUnit.charitable_deduction).toBeGreaterThan(0);
+      expect(withMortgage.taxUnit.income_tax).toBeLessThan(withoutMortgage.taxUnit.income_tax);
+    }, 60_000);
+
     it("does not zero one adult's SSI when the other reports theirs", async () => {
       // Before this fix, adult 1 reporting 600 sent `ssi` for adult 1 only,
       // and adult 2's SSI came back 0 instead of the model's amount.

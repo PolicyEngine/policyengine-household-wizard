@@ -1,7 +1,9 @@
 import { toAmount } from '../amount';
+import { toTippedOccupationCode } from '../tippedOccupations';
 import type {
   USHouseholdDraft,
   USPersonDraft,
+  USPersonExpenses,
   USPersonFlags,
   USPersonIncomes,
 } from '../types';
@@ -97,9 +99,12 @@ const VERBOSE_KEYS = {
  * policyengine-core skips it. So each person gets input variables, which
  * have no formula and whose stored default is what the model would use
  * anyway, plus computed variables only when every person has an answer. The
- * exceptions are `employment_income` and `self_employment_income`, computed
- * totals that policyengine-us's Simulation moves onto `*_before_lsr` inputs
- * (reviewed in `REVIEWED_PARTIAL_COMPUTED` in the invariant tests).
+ * exceptions are `employment_income`, `self_employment_income` and
+ * `long_term_capital_gains`, computed totals that policyengine-us's Simulation
+ * moves onto the inputs `employment_income_before_lsr`,
+ * `self_employment_income_before_lsr` and
+ * `long_term_capital_gains_before_response` (reviewed in
+ * `REVIEWED_PARTIAL_COMPUTED` in the invariant tests).
  *
  * - `is_tax_unit_dependent` comes from `kind`, which every person has.
  * - `isFullTimeStudent` is sent as the input `is_full_time_college_student`,
@@ -173,12 +178,19 @@ export const SSI_TAKE_UP_VARIABLE = 'takes_up_ssi_if_eligible';
  * otherwise the model computes everyone's SSI. `validate()` asks for the
  * missing amounts in that case.
  *
+ * Three totals are set directly: `employment_income`, `self_employment_income`
+ * and `long_term_capital_gains`. Each adds an input and a behavioral response,
+ * and PolicyEngine US's Simulation moves an input on the total onto that
+ * component input (`employment_income_before_lsr`,
+ * `self_employment_income_before_lsr`, `long_term_capital_gains_before_response`).
+ *
  * `tests/us-household/v1PayloadInvariants.test.ts` checks this mapping against
  * the PolicyEngine US variable graph, including the few totals that are safe
  * to set directly.
  */
 export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>> = {
   employmentIncome: 'employment_income',
+  tipIncome: 'tip_income',
   selfEmploymentIncome: 'self_employment_income',
   socialSecurityIncome: 'social_security_retirement',
   ssiAmount: 'ssi',
@@ -187,12 +199,60 @@ export const INCOME_TO_VARIABLE: Readonly<Record<keyof USPersonIncomes, string>>
   publicPensionIncome: 'taxable_public_pension_income',
   privatePensionIncome: 'taxable_private_pension_income',
   dividendIncome: 'qualified_dividend_income',
+  nonQualifiedDividendIncome: 'non_qualified_dividend_income',
+  shortTermCapitalGains: 'short_term_capital_gains',
+  longTermCapitalGains: 'long_term_capital_gains',
   taxableInterestIncome: 'taxable_interest_income',
   rentalIncome: 'rental_income',
   unemploymentCompensation: 'unemployment_compensation',
   childSupportReceived: 'child_support_received',
   miscellaneousIncome: 'miscellaneous_income',
 };
+
+/**
+ * Income fields that PolicyEngine US also counts inside another variable, and
+ * that variable. Exported for tests and tooling; not part of the package entry
+ * points.
+ *
+ * PolicyEngine US counts tips as part of wages: income tax and payroll tax
+ * read `employment_income` (through `irs_employment_income` and
+ * `payroll_tax_gross_wages`), and nothing adds `tip_income` to income. Its
+ * qualified tips deduction and Georgia's cash tip exclusion read `tip_income`.
+ * So `tipIncome` is sent as `tip_income` and also added to
+ * `employment_income`; without the second, tips would be deducted but never
+ * taxed.
+ */
+export const INCOME_ALSO_ADDED_TO: Readonly<Partial<Record<keyof USPersonIncomes, string>>> = {
+  tipIncome: 'employment_income',
+};
+
+/**
+ * Person expense fields and the PolicyEngine US input variables they set.
+ * Exported for tests and tooling; not part of the package entry points.
+ *
+ * `mortgageInterest` sets `home_mortgage_interest`, the input. PolicyEngine US
+ * computes `mortgage_interest` as the sum of deductible and non-deductible
+ * interest, and its interest deduction reads the input, so an amount sent as
+ * `mortgage_interest` changes no deduction.
+ */
+export const EXPENSE_TO_VARIABLE: Readonly<Record<keyof USPersonExpenses, string>> = {
+  charitableCashDonations: 'charitable_cash_donations',
+  mortgageInterest: 'home_mortgage_interest',
+  realEstateTaxes: 'real_estate_taxes',
+};
+
+/**
+ * `tippedOccupationCode` is sent as this variable, an integer input whose
+ * default 0 means no listed occupation. Only listed codes and 0 are sent.
+ */
+export const TIPPED_OCCUPATION_VARIABLE = 'treasury_tipped_occupation_code';
+
+/** Every amount field, with each variable it is added to. */
+const AMOUNT_TO_VARIABLES: ReadonlyArray<[string, string]> = [
+  ...Object.entries(INCOME_TO_VARIABLE),
+  ...(Object.entries(INCOME_ALSO_ADDED_TO) as Array<[string, string]>),
+  ...Object.entries(EXPENSE_TO_VARIABLE),
+];
 
 function yearMap(year: string, value: number | string | boolean): V1ValueMap {
   return { [year]: value };
@@ -221,13 +281,18 @@ function buildPersonVariables(person: USPersonDraft, year: string): V1PersonReco
     }
   }
 
-  for (const [draftKey, variable] of Object.entries(INCOME_TO_VARIABLE)) {
-    const value = toAmount((person as USPersonDraft)[draftKey as keyof USPersonIncomes]);
+  for (const [draftKey, variable] of AMOUNT_TO_VARIABLES) {
+    const value = toAmount((person as unknown as Record<string, unknown>)[draftKey]);
     if (value !== undefined && draftKey !== 'ssiAmount') {
       const sharedWith = record[variable]?.[year];
       const total = typeof sharedWith === 'number' ? sharedWith + value : value;
       record[variable] = yearMap(year, total);
     }
+  }
+
+  const occupationCode = toTippedOccupationCode(person.tippedOccupationCode);
+  if (occupationCode !== undefined) {
+    record[TIPPED_OCCUPATION_VARIABLE] = yearMap(year, occupationCode);
   }
 
   return record;

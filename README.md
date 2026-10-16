@@ -90,7 +90,13 @@ for migrating from each app's local wizard.
   way: `publicPensionIncome` and `privatePensionIncome` set the components of
   `taxable_pension_income`, which state rules read. A pension of unknown
   source (`pensionIncome`) is sent as private, and fields that share a
-  variable are summed. Property tests check the
+  variable are summed. Expenses set inputs too: `mortgageInterest` sets
+  `home_mortgage_interest`, not `mortgage_interest`, a computed total the
+  interest deduction ignores (the tests keep it as a guarded total that no
+  field may set). Tips are taxed as wages in PolicyEngine US, so `tipIncome`
+  sets `tip_income` and is also added to `employment_income`; with a listed
+  `tippedOccupationCode` (`TIPPED_OCCUPATIONS`, from the final section 224
+  regulations) they qualify for the 2025-2028 tip deduction. Property tests check the
   adapter against a snapshot of the PolicyEngine US variable graph (refresh it
   with `bun run regenerate-variable-graph`). Each total the adapter sets
   directly, and each variable that more than one field sets, is listed with
@@ -100,9 +106,9 @@ for migrating from each app's local wizard.
   input for one person on a variable the model computes gives everyone else
   a stored default instead of the computed value: `ssi` sent for one adult
   zeroed the other adult's SSI. The adapter therefore sends computed
-  variables for every person or no one, except employment and
-  self-employment income, which policyengine-us's Simulation moves onto
-  input variables. `kind` is sent for everyone as `is_tax_unit_dependent`.
+  variables for every person or no one, except employment income,
+  self-employment income and long-term capital gains, which
+  policyengine-us's Simulation moves onto input variables. `kind` is sent for everyone as `is_tax_unit_dependent`.
   `isFullTimeStudent` is sent as the input `is_full_time_college_student`,
   and only from age 18, because the model counts ages 5 to 17 as K-12
   students. `ssiAmount` is sent as `ssi` only when every person has an

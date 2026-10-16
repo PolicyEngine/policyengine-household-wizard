@@ -1,12 +1,20 @@
 import { toAmount } from './amount';
 import { isUSStateCode } from './states';
 import { isCountyCode } from './counties';
+import { toTippedOccupationCode } from './tippedOccupations';
 import type {
   USHouseholdDraft,
   USPersonDraft,
+  USPersonExpenses,
   ValidationIssue,
   ValidationResult,
 } from './types';
+
+const EXPENSE_LABELS: Readonly<Record<keyof USPersonExpenses, string>> = {
+  charitableCashDonations: 'Charitable cash donations',
+  mortgageInterest: 'Mortgage interest',
+  realEstateTaxes: 'Real estate taxes',
+};
 
 /**
  * "adult 2" or "dependent 1": people are numbered within their kind, in draft
@@ -107,6 +115,32 @@ export function validate(
         code: 'person.age.required',
         path: `people[${index}].age`,
         message: `Age is required for ${label}.`,
+      });
+    }
+
+    for (const [field, fieldLabel] of Object.entries(EXPENSE_LABELS)) {
+      const amount = toAmount(person[field as keyof USPersonExpenses]);
+      if (amount !== undefined && amount < 0) {
+        issues.push({
+          code: `person.${field}.negative`,
+          path: `people[${index}].${field}`,
+          message: `${fieldLabel} for ${label} cannot be negative.`,
+        });
+      }
+    }
+
+    // The V1 adapter sends only listed codes and 0, so any other answer would
+    // be dropped silently.
+    const occupationCode = person.tippedOccupationCode as unknown;
+    const answeredOccupation =
+      occupationCode !== undefined &&
+      occupationCode !== null &&
+      !(typeof occupationCode === 'string' && occupationCode.trim() === '');
+    if (answeredOccupation && toTippedOccupationCode(occupationCode) === undefined) {
+      issues.push({
+        code: 'person.tippedOccupationCode.invalid',
+        path: `people[${index}].tippedOccupationCode`,
+        message: `Tipped occupation code ${String(occupationCode)} for ${label} is not on the Treasury list.`,
       });
     }
 

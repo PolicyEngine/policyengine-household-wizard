@@ -18,15 +18,31 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  EXPENSE_TO_VARIABLE,
   FLAG_TO_VARIABLE,
+  INCOME_ALSO_ADDED_TO,
   INCOME_TO_VARIABLE,
   SSI_TAKE_UP_VARIABLE,
+  TIPPED_OCCUPATION_VARIABLE,
 } from '../src/us-household/adapters/v1Payload';
 
 const METADATA_URL = 'https://api.policyengine.org/us/metadata';
 
 /** Person variables the adapter sets outside the flag and income maps. */
-const OTHER_PERSON_VARIABLES = ['age', 'is_tax_unit_dependent', SSI_TAKE_UP_VARIABLE];
+const OTHER_PERSON_VARIABLES = [
+  'age',
+  'is_tax_unit_dependent',
+  SSI_TAKE_UP_VARIABLE,
+  TIPPED_OCCUPATION_VARIABLE,
+];
+/**
+ * Computed totals that apps have set by mistake. The adapter never sends them;
+ * the snapshot keeps them so the tests can check they are still totals.
+ * `mortgage_interest` adds deductible and non-deductible interest, and the
+ * interest deduction ignores an input on it (GiveCalc wrote the user's mortgage
+ * interest there until PolicyEngine/givecalc#85).
+ */
+export const GUARDED_TOTALS = ['mortgage_interest'];
 /** Household variables the adapter sets. */
 const HOUSEHOLD_VARIABLES = ['state_name', 'county'];
 
@@ -151,7 +167,10 @@ async function main() {
     ...OTHER_PERSON_VARIABLES,
     ...Object.values(FLAG_TO_VARIABLE),
     ...Object.values(INCOME_TO_VARIABLE),
+    ...(Object.values(INCOME_ALSO_ADDED_TO) as string[]),
+    ...Object.values(EXPENSE_TO_VARIABLE),
     ...HOUSEHOLD_VARIABLES,
+    ...GUARDED_TOTALS,
   ];
   const graph = buildVariableGraph(payload.result, roots);
 
