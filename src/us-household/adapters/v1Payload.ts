@@ -148,9 +148,9 @@ export const COLLEGE_MIN_AGE = 18;
 /**
  * An entered 0 in `ssiAmount` is sent as this variable, set to false. It is an
  * input (default true), so it sets that person's SSI to 0 without affecting
- * anyone else. In policyengine-us 1.764.6 only `ssi` reads it. In 2.x, state
- * SSI supplements and a county General Relief rule read it too, so a 0 also
- * means no state supplement for that person.
+ * anyone else. In policyengine-us 1.764.6 only `ssi` reads it. In 2.49.2,
+ * state SSI supplements and a county General Relief rule read it too, so a 0
+ * also means no state supplement for that person.
  */
 export const SSI_TAKE_UP_VARIABLE = 'takes_up_ssi_if_eligible';
 

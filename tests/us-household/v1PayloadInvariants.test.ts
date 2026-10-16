@@ -96,7 +96,8 @@ const REVIEWED_ALSO_ADDED: Record<string, { variable: string; reason: string }> 
     reason:
       'PolicyEngine US documents employment_income as wages including tips, and taxes ' +
       'read it (irs_employment_income, payroll_tax_gross_wages). tip_income is read on its ' +
-      'own only by tip rules, so tips go to both variables.',
+      'own by tip rules, and by Florida School Readiness, which double counts it ' +
+      '(PolicyEngine/policyengine-us#10262), so tips go to both variables.',
   },
 };
 

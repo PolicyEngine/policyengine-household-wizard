@@ -135,8 +135,9 @@ export interface USPersonIncomes {
  * the tax unit's amounts, so an app that asks about a shared expense once can
  * put it on one adult, ideally the one who pays it or owns the home. Some
  * state rules read a person's own amount: Montana caps real estate taxes per
- * person, and several state property tax credits (Kentucky, Ohio, South
- * Carolina, Mississippi, Tennessee) read the owner's real estate taxes.
+ * person, and homestead or elderly property tax reductions in Kentucky, Ohio,
+ * South Carolina, Mississippi and Tennessee read the owner's (Kentucky) or the
+ * head's or spouse's real estate taxes.
  */
 export interface USPersonExpenses {
   /** Gifts of cash to charity; "charitable_cash_donations" in PolicyEngine US. */
