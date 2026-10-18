@@ -237,8 +237,8 @@ describe('toV1HouseholdPayload', () => {
 
   it('sends tips as tip_income and adds them to wages', () => {
     // PolicyEngine US taxes tips through employment_income and reads
-    // tip_income only for the tip deduction, so tips sent only as tip_income
-    // would be deducted but never taxed.
+    // tip_income on its own for tip rules (see INCOME_ALSO_ADDED_TO), so
+    // tips sent only as tip_income would be deducted but never taxed.
     const draft = updatePerson(singleAdult(), 'adult-1', {
       employmentIncome: 30000,
       tipIncome: 12000,

@@ -1,5 +1,8 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { toV1HouseholdPayload } from '@/us-household/adapters/v1Payload';
 import { normalizeLegacyDraft } from '@/us-household/normalize';
+import { validate } from '@/us-household/validate';
 
 describe('normalizeLegacyDraft', () => {
   it('maps filing status to marital status (Coverage Compass shape)', () => {
@@ -156,6 +159,86 @@ describe('normalizeLegacyDraft', () => {
       mortgageInterest: 7000,
       realEstateTaxes: 3000,
     });
+  });
+
+  it('takes tips out of a legacy wage total, so wages are not counted twice', () => {
+    // A legacy employment_income follows PolicyEngine US and includes tips.
+    // Reported by the post-merge review of #9: a Nevada server with
+    // employment_income 42,000 and tip_income 12,000 was sent 54,000 of wages.
+    const draft = normalizeLegacyDraft({
+      state: 'NV',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 30, employment_income: 42000, tip_income: 12000 }],
+    });
+    expect(draft.people[0]).toMatchObject({ employmentIncome: 30000, tipIncome: 12000 });
+    const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+    expect(person.employment_income).toEqual({ [String(draft.year)]: 42000 });
+    expect(person.tip_income).toEqual({ [String(draft.year)]: 12000 });
+  });
+
+  it('keeps a legacy wage total in the payload for any tips', () => {
+    const money = fc.oneof(
+      fc.constant(undefined),
+      fc.double({ min: 0, max: 1_000_000, noNaN: true }),
+    );
+    fc.assert(
+      fc.property(
+        money,
+        money,
+        fc.constantFrom('employment_income', 'earned_income'),
+        fc.constantFrom('tip_income', 'tipIncome'),
+        (wages, tips, wageKey, tipKey) => {
+          const draft = normalizeLegacyDraft({
+            state: 'TX',
+            marital_status: 'UNMARRIED',
+            year: 2026,
+            people: [{ kind: 'adult', age: 40, [wageKey]: wages, [tipKey]: tips }],
+          });
+          const person = toV1HouseholdPayload(draft).data.people['adult-1'];
+          const expected = wages ?? tips;
+          if (expected === undefined) {
+            expect(person.employment_income).toBeUndefined();
+          } else {
+            expect(person.employment_income?.['2026']).toBeCloseTo(expected, 6);
+          }
+          expect(person.tip_income).toEqual(tips === undefined ? undefined : { '2026': tips });
+        },
+      ),
+    );
+  });
+
+  it('flags negative wages left by tips above a legacy wage total', () => {
+    const draft = normalizeLegacyDraft({
+      state: 'TX',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 40, employment_income: 5000, tip_income: 12000 }],
+    });
+    expect(draft.people[0].employmentIncome).toBe(-7000);
+    // The payload still carries the legacy total.
+    expect(toV1HouseholdPayload(draft).data.people['adult-1'].employment_income).toEqual({
+      [String(draft.year)]: 5000,
+    });
+    expect(validate(draft).issues.map((issue) => issue.code)).toContain(
+      'person.employmentIncome.negative',
+    );
+  });
+
+  it('subtracts nothing from camelCase wages, whichever tip key is used', () => {
+    const draft = normalizeLegacyDraft({
+      state: 'NV',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 30, employmentIncome: 30000, tip_income: 12000 }],
+    });
+    expect(draft.people[0]).toMatchObject({ employmentIncome: 30000, tipIncome: 12000 });
+  });
+
+  it('reads a camelCase employmentIncome as wages without tips', () => {
+    const draft = normalizeLegacyDraft({
+      state: 'NV',
+      marital_status: 'UNMARRIED',
+      people: [{ kind: 'adult', age: 30, employmentIncome: 30000, tipIncome: 12000 }],
+    });
+    expect(draft.people[0]).toMatchObject({ employmentIncome: 30000, tipIncome: 12000 });
   });
 
   it("reads a legacy mortgage_interest as the interest paid, and drops unlisted occupations", () => {
