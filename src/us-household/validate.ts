@@ -129,6 +129,15 @@ export function validate(
       }
     }
 
+    const wages = toAmount(person.employmentIncome);
+    if (wages !== undefined && wages < 0) {
+      issues.push({
+        code: 'person.employmentIncome.negative',
+        path: `people[${index}].employmentIncome`,
+        message: `Wages for ${label} cannot be negative.`,
+      });
+    }
+
     const tips = toAmount(person.tipIncome);
     if (tips !== undefined && tips < 0) {
       issues.push({

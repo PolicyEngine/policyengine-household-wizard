@@ -150,12 +150,14 @@ function normalizePerson(
 ): USPersonDraft {
   const id =
     kind === 'adult' ? `adult-${ordinal}` : `dependent-${ordinal}`;
-  const tips = coerceNumber(legacy.tipIncome ?? legacy.tip_income);
+  const tips = coerceNumber(legacy.tipIncome) ?? coerceNumber(legacy.tip_income);
   // Legacy `employment_income` and `earned_income` follow PolicyEngine US,
   // where wages include tips; the draft's `employmentIncome` excludes them,
   // because the V1 adapter adds `tipIncome` back. So tips come out of a
   // legacy wage total, and the payload's `employment_income` equals the
   // legacy figure. A camelCase `employmentIncome` is already the draft's.
+  // Tips above the legacy total leave negative wages, which `validate()`
+  // flags (`person.employmentIncome.negative`) so the app can ask.
   const legacyWages =
     coerceNumber(legacy.employment_income) ?? coerceNumber(legacy.earned_income);
   return {

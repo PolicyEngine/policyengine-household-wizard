@@ -667,7 +667,7 @@ describe('toV1HouseholdPayload invariants', () => {
     fc.assert(
       fc.property(draftArb, (draft) => {
         const expected = draft.people.flatMap((person, index) =>
-          [...EXPENSE_FIELDS, 'tipIncome' as const].flatMap((field) => {
+          [...EXPENSE_FIELDS, 'employmentIncome' as const, 'tipIncome' as const].flatMap((field) => {
             const amount = amountOf(person[field]);
             return amount !== undefined && amount < 0 ? [`people[${index}].${field}`] : [];
           }),

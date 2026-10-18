@@ -10,6 +10,8 @@ import type { USHouseholdDraft, USPersonDraft } from './types';
  *                  &p=adult:35:e50000,adult:33:e20000,dep:6`
  *
  * Fields are pipe-separated within each person; people are comma-separated.
+ * Only the keys below are written: other person fields, such as tips,
+ * investment income and expenses, are dropped from links for now.
  * Income/flag keys are single letters to keep the URL short:
  *   - `e` = employmentIncome
  *   - `s` = ssiAmount
