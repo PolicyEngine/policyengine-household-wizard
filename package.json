@@ -1,7 +1,7 @@
 {
   "name": "policyengine-household-wizard",
   "version": "0.2.0",
-  "description": "Shared wizard primitives and US household draft contract for PolicyEngine apps.",
+  "description": "Shared wizard primitives and US and UK household draft contracts for PolicyEngine apps.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -26,6 +26,16 @@
       "types": "./dist/us-household/adapters/index.d.ts",
       "import": "./dist/us-household-adapters.js",
       "require": "./dist/us-household-adapters.cjs"
+    },
+    "./uk-household": {
+      "types": "./dist/uk-household/index.d.ts",
+      "import": "./dist/uk-household.js",
+      "require": "./dist/uk-household.cjs"
+    },
+    "./uk-household/adapters": {
+      "types": "./dist/uk-household/adapters/index.d.ts",
+      "import": "./dist/uk-household-adapters.js",
+      "require": "./dist/uk-household-adapters.cjs"
     },
     "./styles.css": "./src/styles.css"
   },

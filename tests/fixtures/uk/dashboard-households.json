@@ -1,0 +1,2454 @@
+{
+ "_note": "UK household drafts and the household impact API request each one must give. Each is one of the Autumn Budget 2026 dashboard's example households, its starting answers, or an edge case of its form, as a draft; the request is the body that dashboard's buildHouseholdRequest produced for the same answers at PolicyEngine/uk-autumn-budget-dashboard-2026@cc15d50e9c01520e7d77dc5a70b17f3fc258f9b6 (its src/test/fixtures/householdRequests.golden.json), captured by running that code.",
+ "source_commit": "cc15d50e9c01520e7d77dc5a70b17f3fc258f9b6",
+ "fixtures": [
+  {
+   "name": "defaults",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:renter-22",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 22,
+     "employmentIncome": 25000,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": 900,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 22,
+     "employment_income": 25000,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 900,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:apprentice-19",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 19,
+     "employmentIncome": 23600,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": 600,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 19,
+     "employment_income": 23600,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 600,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:graduate-23",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 23,
+     "employmentIncome": 32300,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "PLAN_2",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": 900,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 23,
+     "employment_income": 32300,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 900,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "PLAN_2",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:pensioner-70",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 70,
+     "employmentIncome": 0,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "OWNED_OUTRIGHT",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 300,
+     "diesel": 0,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 70,
+     "employment_income": 0,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "OWNED_OUTRIGHT",
+     "monthly_rent": 0,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 300,
+     "diesel_spending": 0,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:family-uc",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 34,
+     "employmentIncome": 21000,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 33,
+     "employmentIncome": 0,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [
+     {
+      "age": 7
+     },
+     {
+      "age": 4
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1300
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 34,
+     "employment_income": 21000,
+     "has_partner": true,
+     "partner_age": 33,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 7
+      },
+      {
+       "age": 4
+      }
+     ],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1300,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:graduate-35k",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 27,
+     "employmentIncome": 35000,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "PLAN_2",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 27,
+     "employment_income": 35000,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "PLAN_2",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:driver",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 40,
+     "employmentIncome": 38000,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "OWNED_WITH_MORTGAGE",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 2600,
+     "diesel": 0,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 40,
+     "employment_income": 38000,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "OWNED_WITH_MORTGAGE",
+     "monthly_rent": 0,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 2600,
+     "diesel_spending": 0,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "example:higher-earner",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 45,
+     "employmentIncome": 110000,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "OWNED_WITH_MORTGAGE",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 45,
+     "employment_income": 110000,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "OWNED_WITH_MORTGAGE",
+     "monthly_rent": 0,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:partner off, answers kept",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 52,
+     "employmentIncome": 61000,
+     "privatePensionIncome": 4000,
+     "statePension": 9000
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 52,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:partner on",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 52,
+     "employmentIncome": 61000,
+     "privatePensionIncome": 4000,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": true,
+     "partner_age": 52,
+     "partner_employment_income": 61000,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 4000,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:partner at State Pension age, prefilled",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 70,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": true,
+     "partner_age": 70,
+     "partner_employment_income": 34200,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:partner at State Pension age, entered",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 70,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 9100.5
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": true,
+     "partner_age": 70,
+     "partner_employment_income": 34200,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026,
+     "partner_state_pension": 9100.5
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:partner under State Pension age, entered",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 60,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 9100
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": true,
+     "partner_age": 60,
+     "partner_employment_income": 34200,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:you at State Pension age, entered",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 67,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 11000,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 67,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026,
+     "state_pension": 11000
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:you at 66 in 2026",
+   "year": 2026,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 66,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 11000,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2026,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 66,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026,
+     "state_pension": 11000
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:you at 66 in 2027",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 66,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 11000,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 66,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:State Pension 0",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 75,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": 0,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 75,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026,
+     "state_pension": 0
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:children with education",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [
+     {
+      "age": 17,
+      "inEducation": false
+     },
+     {
+      "age": 16,
+      "inEducation": true
+     },
+     {
+      "age": 19
+     },
+     {
+      "age": 4
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 17,
+       "in_education": false
+      },
+      {
+       "age": 16,
+       "in_education": true
+      },
+      {
+       "age": 19,
+       "in_education": true
+      },
+      {
+       "age": 4
+      }
+     ],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:child of 20",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [
+     {
+      "age": 20
+     },
+     {
+      "age": 3
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 20
+      },
+      {
+       "age": 3
+      }
+     ],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:children text the parser trims",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [
+     {
+      "age": 5,
+      "inEducation": true
+     },
+     {
+      "age": 3,
+      "inEducation": false
+     },
+     {
+      "age": 18,
+      "inEducation": false
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 5
+      },
+      {
+       "age": 3
+      },
+      {
+       "age": 18,
+       "in_education": false
+      }
+     ],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:children and childcare",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [
+     {
+      "age": 2
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 640,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 2
+      }
+     ],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 640,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:childcare without children",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 640,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:renting from the council, rent entered",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_FROM_COUNCIL",
+    "monthlyRent": 512.25,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_FROM_COUNCIL",
+     "monthly_rent": 512.25,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:housing association, prefilled rent",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "LONDON",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_FROM_HA",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "LONDON",
+     "claims_universal_credit": true,
+     "tenure": "RENT_FROM_HA",
+     "monthly_rent": 2338,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:owner with rent left in",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "OWNED_OUTRIGHT",
+    "monthlyRent": 900,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "OWNED_OUTRIGHT",
+     "monthly_rent": 0,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:unknown region",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "ATLANTIS",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "ATLANTIS",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 1406,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:Northern Ireland",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTHERN_IRELAND",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTHERN_IRELAND",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 879,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:electricity left out",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": null
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:private pension left out",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": null,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": null,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": true,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": true,
+     "partner_age": 30,
+     "partner_employment_income": 34200,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": true,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:Universal Credit off",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "NORTH_WEST",
+    "head": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "NONE",
+     "salarySacrificePensionContributions": 0,
+     "dividendIncome": 0,
+     "savingsInterestIncome": 0,
+     "propertyIncome": 0
+    },
+    "hasPartner": false,
+    "partner": {
+     "age": 30,
+     "employmentIncome": 34200,
+     "privatePensionIncome": 0,
+     "statePension": null
+    },
+    "children": [],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": null,
+    "councilTaxBand": "D",
+    "claimsUniversalCredit": false,
+    "monthlyChildcare": 0,
+    "spending": {
+     "petrol": 620,
+     "diesel": 340,
+     "electricity": 1040
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 30,
+     "employment_income": 34200,
+     "has_partner": false,
+     "partner_age": 30,
+     "partner_employment_income": 0,
+     "children": [],
+     "region": "NORTH_WEST",
+     "claims_universal_credit": false,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 975,
+     "dividend_income": 0,
+     "savings_interest_income": 0,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 0,
+     "property_income": 0,
+     "petrol_spending": 620,
+     "diesel_spending": 340,
+     "electricity_spending": 1040,
+     "salary_sacrifice_pension_contributions": 0,
+     "student_loan_plan": "NONE",
+     "council_tax_band": "D",
+     "monthly_childcare": 0,
+     "salary_year": 2026
+    },
+    "include": []
+   }
+  },
+  {
+   "name": "edge:everything at once",
+   "year": 2027,
+   "policies": [
+    "road_fuel_vat_cut"
+   ],
+   "include": [],
+   "draft": {
+    "salaryYear": 2026,
+    "region": "SCOTLAND",
+    "head": {
+     "age": 58,
+     "employmentIncome": 123456.78,
+     "privatePensionIncome": 0,
+     "statePension": null,
+     "studentLoanPlan": "PLAN_4",
+     "salarySacrificePensionContributions": 8000,
+     "dividendIncome": 3000,
+     "savingsInterestIncome": 400,
+     "propertyIncome": 12000
+    },
+    "hasPartner": true,
+    "partner": {
+     "age": 69,
+     "employmentIncome": 0,
+     "privatePensionIncome": 15000,
+     "statePension": 12000
+    },
+    "children": [
+     {
+      "age": 16,
+      "inEducation": false
+     },
+     {
+      "age": 12
+     }
+    ],
+    "tenure": "RENT_PRIVATELY",
+    "monthlyRent": 1500,
+    "councilTaxBand": "G",
+    "claimsUniversalCredit": false,
+    "monthlyChildcare": 300,
+    "spending": {
+     "petrol": 0,
+     "diesel": 1800,
+     "electricity": 2100
+    }
+   },
+   "request": {
+    "year": 2027,
+    "policies": [
+     "road_fuel_vat_cut"
+    ],
+    "household": {
+     "age": 58,
+     "employment_income": 123456.78,
+     "has_partner": true,
+     "partner_age": 69,
+     "partner_employment_income": 0,
+     "children": [
+      {
+       "age": 16,
+       "in_education": false
+      },
+      {
+       "age": 12
+      }
+     ],
+     "region": "SCOTLAND",
+     "claims_universal_credit": false,
+     "tenure": "RENT_PRIVATELY",
+     "monthly_rent": 1500,
+     "dividend_income": 3000,
+     "savings_interest_income": 400,
+     "private_pension_income": 0,
+     "partner_private_pension_income": 15000,
+     "property_income": 12000,
+     "petrol_spending": 0,
+     "diesel_spending": 1800,
+     "electricity_spending": 2100,
+     "salary_sacrifice_pension_contributions": 8000,
+     "student_loan_plan": "PLAN_4",
+     "council_tax_band": "G",
+     "monthly_childcare": 300,
+     "salary_year": 2026,
+     "partner_state_pension": 12000
+    },
+    "include": []
+   }
+  }
+ ]
+}

@@ -29,6 +29,8 @@ const SHIMS = [
   { name: 'primitives', folder: 'primitives' },
   { name: 'us-household', folder: 'us-household' },
   { name: 'us-household-adapters', folder: 'us-household/adapters' },
+  { name: 'uk-household', folder: 'uk-household' },
+  { name: 'uk-household-adapters', folder: 'uk-household/adapters' },
 ];
 
 async function main() {

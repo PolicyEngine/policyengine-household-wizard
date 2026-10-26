@@ -1,9 +1,10 @@
 # policyengine-household-wizard
 
-Shared wizard primitives and a US household draft contract for PolicyEngine
-apps (cliff-watch, Coverage Compass, app-v2, and standalone calculators).
+Shared wizard primitives and US and UK household draft contracts for
+PolicyEngine apps (cliff-watch, Coverage Compass, app-v2, the UK Autumn Budget
+2026 dashboard, and standalone calculators).
 
-The package ships two surfaces:
+The package ships three surfaces:
 
 - **Wizard primitives** — copy-neutral React primitives for step state, progress,
   navigation, option cards, and review screens. No household-specific code.
@@ -11,6 +12,11 @@ The package ships two surfaces:
   marital status (issue #1044), validation rules, URL serialization,
   state-filtered counties, and adapters to the PolicyEngine API V1 household
   payload.
+- **UK household model** (`policyengine-household-wizard/uk-household`) — the
+  household the UK Autumn Budget 2026 dashboard asks about: a draft type,
+  typical answers with their ONS sources, validation against the household
+  impact API's bounds, State Pension age by year, URL serialization, and an
+  adapter to that API's request. See [`docs/uk-household.md`](docs/uk-household.md).
 
 ## Install
 
@@ -64,7 +70,8 @@ function MyWizard() {
 }
 ```
 
-See [`docs/api.md`](docs/api.md) for wizard navigation and focus APIs and [`docs/migration.md`](docs/migration.md)
+See [`docs/api.md`](docs/api.md) for wizard navigation and focus APIs, [`docs/uk-household.md`](docs/uk-household.md)
+for the UK household model, and [`docs/migration.md`](docs/migration.md)
 for migrating from each app's local wizard.
 
 ## Design decisions
@@ -124,6 +131,8 @@ src/
   us-household/      types, draft, validate, normalize, serialize, counties
     adapters/        toV1HouseholdPayload — PolicyEngine API V1 envelope
     data/            counties-by-state.json
+  uk-household/      types, codes, defaults, draft, validate, serialize, State Pension
+    adapters/        toHouseholdImpactRequest — the UK Autumn Budget dashboard's API
 tests/               vitest unit and round-trip tests
 scripts/             generate-counties.ts, generate-variable-graph.ts
 ```

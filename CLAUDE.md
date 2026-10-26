@@ -1,6 +1,6 @@
 # policyengine-household-wizard
 
-Shared wizard primitives and US household draft contract for PolicyEngine apps.
+Shared wizard primitives and US and UK household draft contracts for PolicyEngine apps.
 
 ## Commands
 
@@ -15,7 +15,10 @@ Shared wizard primitives and US household draft contract for PolicyEngine apps.
 ## Architecture
 
 - **Vite library mode** — builds ESM + CJS + types for `index`, `primitives`,
-  `us-household`, and `us-household-adapters` entry points.
+  `us-household`, `us-household-adapters`, `uk-household`, and
+  `uk-household-adapters` entry points. The root `index` exports the
+  primitives and the US model only; the UK model shares its names, so it is
+  imported from its subpath.
 - **No UI shell** — the package exposes primitives (option card, progress,
   navigation, review list, `useWizardSteps`) and a data contract; apps build
   their own form layouts.
@@ -73,5 +76,17 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   total and that no field sets it. Then run
   `bun run regenerate-variable-graph` so the invariant tests see the new
   variable.
-- New country (e.g. UK) → mirror the structure under
-  `src/uk-household/` rather than mixing into `us-household/`.
+- New UK household field → add to `src/uk-household/types.ts` and update
+  `createBlankDraft`, `createTypicalDraft`, `validate` (with its bound in
+  `UK_HOUSEHOLD_LIMITS`), `serializeDraft`/`deserializeDraft` and
+  `toHouseholdImpactRequest` together. The request must stay byte-identical
+  to what the UK Autumn Budget 2026 dashboard sent: the fixtures in
+  `tests/fixtures/uk/dashboard-households.json` were captured from its code,
+  and `tests/uk-household/reference/` is a verbatim copy of that code. Never
+  edit the reference to match the package; a new field needs fixtures
+  captured from the dashboard, and an intended difference needs its own test
+  and an entry in `docs/uk-household.md`. Keep
+  `tests/uk-household/reference/householdImpactApi.ts` in step with the
+  API's constraints.
+- New country → mirror the structure of `src/us-household/` and
+  `src/uk-household/` rather than mixing into either.
