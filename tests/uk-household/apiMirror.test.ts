@@ -104,7 +104,7 @@ describe('the household impact API mirror', () => {
     const packages = [...differing(reviewed.packages, captured.packages), ...differing(reviewed.contents, captured.contents)];
     const changed = [...new Set(packages)].sort();
     for (const key of ['python', 'platform'] as const) {
-      if (captured[key] !== reviewed[key]) changed.push(captured[key]);
+      if (captured[key] !== reviewed[key]) changed.push(`${key} ${captured[key]}`);
     }
     changed.push(...differing(reviewed.flags, captured.flags).map((flag) => `sys.flags.${flag}`));
     changed.push(...differing(reviewed.xoptions, captured.xoptions).map((option) => `-X ${option}`));

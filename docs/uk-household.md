@@ -174,28 +174,35 @@ The capture runs the dashboard's own API. It exports a commit with
 cached bytecode, with `-X utf8`, and without the `PYTHON*` environment
 variables apart from `PYTHONPATH`, so it runs in the same mode whatever the
 shell sets. The capture stops if Python runs optimized (`-O`), which drops
-its checks. Before it imports the dashboard, it checks four things:
+its checks. Before it imports the dashboard, it checks five things:
 - the files are the commit's;
+- the environment sees no site-packages but its own: not those of the
+  Python install it was made from, nor the user's;
 - every package installed is the version the lock pins, which the lock
   takes from PyPI, each copy if one shadows another;
-- each file a package's `RECORD` lists has a hash, apart from the `RECORD`
-  itself and the list of sources in the project's egg-info, and is as the
-  `RECORD` says, the project's own install included. Every `.pth` file
-  belongs to an installed package or is uv's shim, and the project's has
-  no line that runs code. The project's install adds nothing to
-  site-packages but its metadata and that `.pth` file: its code is the
-  commit's. These checks run once the interpreter has
-  started, so a `.pth` file they stop on has already run. They do not check
-  the files against the wheels the lock pins: a package changed along with
-  its `RECORD` passes them, but changes the digest `environment` records
-  (below);
+- each package has a `RECORD`, apart from the project's egg-info, which
+  must be beside the sources the project's install adds to the path (its
+  own list of them is not used). Each file a `RECORD` lists has a hash,
+  apart from the `RECORD` itself, and is as the `RECORD` says, the
+  project's own install included. Every `.pth` file is a file a `RECORD`
+  hashes, or uv's shim, and the project's has no line that runs code. The
+  project's install adds nothing to site-packages but its metadata and
+  that `.pth` file: its code is the commit's. These checks run once the
+  interpreter has started, so a `.pth` file they stop on has already run.
+  They do not check the files against the wheels the lock pins: a package
+  changed along with its `RECORD` passes them, but changes the digest
+  `environment` records (below);
 - pydantic, pydantic-core, FastAPI, Starlette and policyengine-uk are
   imported from those installs.
 
 Once it is done, it checks that every module loaded from a file, and every
 file opened through Python, was the interpreter's own, a package's file in
 site-packages that the environment's digest covers (not one a `RECORD`
-lists elsewhere), one of the commit's or the capture itself. A module whose spec or
+lists elsewhere), one of the commit's or the capture itself. The
+interpreter's own library is the standard library and its extension
+modules in the Python install the venv was made from, none of its
+site-packages; it is trusted, and `environment` records its version and
+flags, not its files. A module whose spec or
 `__file__` names anything but a regular file, such as a path in an archive,
 stops it.
 
@@ -268,8 +275,11 @@ runs and reads, so a change no case shows still fails the test:
   capture checks), so a file changed along with its `RECORD` still changes
   it; the entry points of the dashboard's own install, whose files name the
   export's path and are otherwise not recorded; the sha256 of uv's shim
-  (`_virtualenv.py` and its `.pth`); and that of the commit's
-  `.python-version`, `pyproject.toml` and `uv.lock`, which decide the rest.
+  (`_virtualenv.py` and its `.pth`), which uv writes, so a capture whose
+  venv another uv version made fails the test, naming `_virtualenv.py`
+  (the reviewed venv is uv 0.11.7's; uv 0.12.13 writes another shim); and
+  that of the commit's `.python-version`, `pyproject.toml` and `uv.lock`,
+  which decide the rest.
   The mirror lists them with the commit they were read at
   (`REVIEWED_DASHBOARD_ENVIRONMENT`), and the test fails when any changes. Starlette parses the body with the interpreter's
   `json.loads`, and pydantic validates it with pydantic-core,

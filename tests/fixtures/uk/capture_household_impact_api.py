@@ -43,15 +43,17 @@ Run it from the wizard's root; it needs git and uv:
 It exports the commit's files to a temporary directory with ``git archive``,
 so the dashboard's checkout is not touched, and runs itself there with
 ``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins.
-It runs with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode
+The ``uv`` first on ``PATH`` makes that venv, and ``environment`` records
+the shim it writes, so use the uv the reviewed one was made with. It runs with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode
 runs, with ``-X utf8``, and without the ``PYTHON*`` environment variables
 apart from ``PYTHONPATH``, so the interpreter runs in the same mode each
 time. It stops if Python runs optimized (``-O``), which drops its checks.
 ``--source DIR`` uses an export made before, and ``--python`` the
 interpreter of an environment already synced to its lock, so the capture
 can run without a network. Either way, before it imports the dashboard, it
-checks that the files are the commit's, that every installed package is the
-version ``uv.lock`` pins, which the lock takes from PyPI, that each file its
+checks that the files are the commit's, that the environment sees no
+site-packages but its own, that every installed package is the version
+``uv.lock`` pins, which the lock takes from PyPI, that each file its
 ``RECORD`` hashes is as the ``RECORD`` says, and that the packages deciding
 the verdicts are imported from those installs, and that the project's
 install adds nothing to site-packages but its metadata and ``.pth`` file.
@@ -59,7 +61,10 @@ It does not check the files against the wheels the lock pins: a package and
 its ``RECORD`` changed together pass, but change the digest the environment
 records. At the end it checks that every module loaded from a file, and
 every file opened through Python, was the interpreter's, a package's in
-site-packages that the digest covers, the commit's or this script.
+site-packages that the digest covers, the commit's or this script. The
+interpreter's own library (the standard library and its extension modules,
+in the install the venv was made from, not its site-packages) is trusted:
+the environment records its version and flags, not its files.
 """
 
 import argparse
@@ -74,6 +79,7 @@ import os
 import platform
 import random
 import re
+import site
 import subprocess
 import sys
 import sysconfig
@@ -172,13 +178,17 @@ def sha256(path: Path) -> str:
 def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict, set[Path]]:
     """Stop unless:
 
+    - the environment sees no site-packages but its own: not those of the
+      install it was made from, nor the user's;
     - every package installed here is the version the dashboard's
       ``uv.lock`` pins at the commit, which the lock takes from PyPI;
+    - every package has a ``RECORD`` but the project's egg-info, which
+      must be in a directory the project's install adds to the path;
     - every file a package's ``RECORD`` lists has a hash (the ``RECORD``
       itself apart) and is as the ``RECORD`` says, the project's own
       install included;
-    - every ``.pth`` file belongs to an installed package or is uv's shim,
-      and the project's runs no code;
+    - every ``.pth`` file is a file a ``RECORD`` hashes, or uv's shim, and
+      the project's runs no code;
     - the project's install puts nothing in site-packages but its
       dist-info and ``.pth`` files;
     - the deciding packages are imported from those installs.
@@ -196,14 +206,22 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
     locked = {canonical(package["name"]): package for package in lock["package"]}
     project = canonical(tomllib.loads(git(dashboard, "show", f"{commit}:pyproject.toml"))["project"]["name"])
     sites = {Path(sysconfig.get_paths()[key]).resolve() for key in ("purelib", "platlib")}
+    # The base install's and the user's site-packages would bring packages,
+    # and .pth files, that no RECORD here checks
+    assert {Path(path).resolve() for path in site.getsitepackages()} <= sites, (
+        f"{sys.prefix} sees site-packages besides its own: {site.getsitepackages()}"
+    )
+    assert not site.ENABLE_USER_SITE, f"{sys.prefix} sees the user's site-packages ({site.getusersitepackages()})"
     # Every copy on the path, so one shadowing another is checked too. The
-    # project's own (its install, and the egg-info a build leaves in src/)
-    # is imported from the source, which check_source checks; its install
-    # names the export's path, so only its entry points are recorded
+    # project's own (its install, and the egg-info a build leaves beside its
+    # sources) is imported from the source, which check_source checks; its
+    # install names the export's path, so only its entry points are recorded
     installed, contents, entry_points, owned, checked = {}, {}, set(), set(), set()
+    # The metadata of each package without a RECORD, and the directories
+    # the project's .pth files add to the path
+    unrecorded, added = [], set()
     for dist in importlib.metadata.distributions():
         name = canonical(dist.metadata["Name"])
-        owned.update(Path(dist.locate_file(file)).resolve() for file in dist.files or [])
         if name == project:
             entry_points |= {f"{point.group}: {point.name} = {point.value}" for point in dist.entry_points}
         else:
@@ -215,8 +233,9 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
             )
             assert pinned.get("source") == PYPI, f"uv.lock takes {name} from {pinned.get('source')}, not PyPI"
         if dist.read_text("RECORD") is None:
-            # The egg-info lists the project's sources, which check_source checks
             assert name == project, f"{name} has no RECORD to check its files against"
+            assert isinstance(dist, importlib.metadata.PathDistribution), f"{name}'s metadata is not in a directory"
+            unrecorded.append(Path(dist._path).resolve())
             continue
         listed = []
         for file in dist.files:
@@ -230,27 +249,39 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
             assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == file.hash.value, (
                 f"{located} is not the file {name} {dist.version} installed"
             )
-            site = next((site for site in sites if located.is_relative_to(site)), None)
-            if site and name != project:
-                listed.append(f"{located.relative_to(site).as_posix()}\t{file.hash.mode}={file.hash.value}")
+            owned.add(located)
+            within = next((directory for directory in sites if located.is_relative_to(directory)), None)
+            if within and name != project:
+                listed.append(f"{located.relative_to(within).as_posix()}\t{file.hash.mode}={file.hash.value}")
                 checked.add(located)
-            if site and name == project:
+            if within and name == project:
                 # Its code is the commit's: its install may only describe it
-                relative = located.relative_to(site)
+                relative = located.relative_to(within)
                 assert relative.parts[0].endswith(".dist-info") or (
                     len(relative.parts) == 1 and located.suffix == ".pth"
                 ), f"{name}'s install adds {relative} to site-packages"
             if name == project and located.suffix == ".pth":
                 # site.py runs a line that starts with "import"; any other
-                # line only adds a directory to the path
+                # line, but a comment or a blank, adds a directory beside it
                 lines = located.read_bytes().decode("utf-8-sig").splitlines()
                 assert not any(line.startswith(("import ", "import\t")) for line in lines), f"{located} runs code"
+                added |= {
+                    Path(os.path.abspath(located.parent / line.rstrip())).resolve()
+                    for line in lines
+                    if line.strip() and not line.startswith("#")
+                }
         if name != project:
             contents[name] = hashlib.sha256("\n".join(sorted(listed)).encode()).hexdigest()
+    for metadata in unrecorded:
+        # The egg-info a build leaves beside the project's sources, which
+        # check_source checks; its own list of them is not used
+        assert metadata.suffix == ".egg-info" and metadata.parent in added, (
+            f"{metadata} has no RECORD, and is not an egg-info beside the sources {project}'s install adds"
+        )
     shims = {}
     for directory in sorted(sites):
         for pth in directory.glob("*.pth"):
-            assert pth.name in VENV_SHIMS or pth.resolve() in owned, f"{pth} belongs to no installed package"
+            assert pth.name in VENV_SHIMS or pth.resolve() in owned, f"{pth} is no file a RECORD here hashes"
         shims |= {name: sha256(shim) for name in sorted(VENV_SHIMS) if (shim := directory / name).is_file()}
     for name in DECIDING:
         module = importlib.import_module(name.replace("-", "_"))
@@ -280,14 +311,20 @@ def check_interpreter():
 
 
 def checked_file(tracked: set[Path], checked: set[Path]):
-    """Whether a file is the interpreter's own library, a package's file in
-    site-packages that a ``RECORD`` checked and the environment's digest
-    covers (not the project's, nor one outside site-packages), one of the
-    commit's, uv's shim (whose sha256 the environment records) or this
-    script."""
-    paths = sysconfig.get_paths()
-    interpreter = [Path(paths[key]).resolve() for key in ("stdlib", "platstdlib")]
-    sites = {Path(paths[key]).resolve() for key in ("purelib", "platlib")}
+    """Whether a file is the interpreter's own library (the standard library
+    and its extension modules in the install the venv was made from, none
+    of its site-packages), a package's file in site-packages that a
+    ``RECORD`` checked and the environment's digest covers (not the
+    project's, nor one outside site-packages), one of the commit's, uv's
+    shim (whose sha256 the environment records) or this script."""
+    sites = {Path(sysconfig.get_paths()[key]).resolve() for key in ("purelib", "platlib")}
+    # In a venv, platstdlib is the venv's own lib directory: take both from
+    # the install it was made from
+    base = sysconfig.get_paths(vars={"base": sys.base_prefix, "platbase": sys.base_exec_prefix})
+    interpreter = [Path(base[key]).resolve() for key in ("stdlib", "platstdlib")]
+    # No site-packages is the interpreter's: not the venv's, the base install's or the user's
+    packages = sites | {Path(base[key]).resolve() for key in ("purelib", "platlib")}
+    packages.add(Path(site.getusersitepackages()).resolve())
 
     def known(located: Path) -> bool:
         return (
@@ -296,7 +333,7 @@ def checked_file(tracked: set[Path], checked: set[Path]):
             or located == Path(__file__).resolve()
             or (located.parent in sites and located.name in VENV_SHIMS)
             or (
-                not any(located.is_relative_to(site) for site in sites)
+                not any(located.is_relative_to(directory) for directory in packages)
                 and any(located.is_relative_to(lib) for lib in interpreter)
             )
         )
@@ -994,6 +1031,8 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
 
 
 def main():
+    # First: -OO also drops the docstring the description is read from
+    check_interpreter()
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--dashboard", type=Path, required=True, help="a clone of the dashboard")
     parser.add_argument("--commit", required=True, help="the dashboard commit to capture")
@@ -1002,7 +1041,6 @@ def main():
     parser.add_argument("--output", type=Path, default=OUT, help="where to write the fixture")
     parser.add_argument("--inner", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    check_interpreter()
     dashboard = args.dashboard.expanduser().resolve()
     commit = resolve_commit(dashboard, args.commit)
     out = args.output.expanduser().resolve()
