@@ -53,12 +53,13 @@ can run without a network. Either way, before it imports the dashboard, it
 checks that the files are the commit's, that every installed package is the
 version ``uv.lock`` pins, which the lock takes from PyPI, that each file its
 ``RECORD`` hashes is as the ``RECORD`` says, and that the packages deciding
-the verdicts are imported from those installs. It does not check the files
-against the wheels the lock pins: a package and its ``RECORD`` changed
-together pass, but change the digest the environment records. At the end it
-checks that every module loaded from a file, and every file opened through
-Python, was the interpreter's, a checked install's, the commit's or this
-script.
+the verdicts are imported from those installs, and that the project's
+install adds nothing to site-packages but its metadata and ``.pth`` file.
+It does not check the files against the wheels the lock pins: a package and
+its ``RECORD`` changed together pass, but change the digest the environment
+records. At the end it checks that every module loaded from a file, and
+every file opened through Python, was the interpreter's, a package's in
+site-packages that the digest covers, the commit's or this script.
 """
 
 import argparse
@@ -178,10 +179,14 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
       install included;
     - every ``.pth`` file belongs to an installed package or is uv's shim,
       and the project's runs no code;
+    - the project's install puts nothing in site-packages but its
+      dist-info and ``.pth`` files;
     - the deciding packages are imported from those installs.
 
     It runs once the interpreter has started, so a ``.pth`` file it stops on
-    has run. Returns the environment and the files checked. The environment
+    has run. Returns the environment and the files checked whose content it
+    records: those in site-packages of every package but the project, the
+    only installed files a module may be loaded from. The environment
     is the interpreter, its flags and the platform; each package's version
     and the sha256 of its files in site-packages, so a file changed along
     with its ``RECORD`` still changes the record; the project's entry
@@ -225,10 +230,16 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
             assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == file.hash.value, (
                 f"{located} is not the file {name} {dist.version} installed"
             )
-            checked.add(located)
             site = next((site for site in sites if located.is_relative_to(site)), None)
-            if site:
+            if site and name != project:
                 listed.append(f"{located.relative_to(site).as_posix()}\t{file.hash.mode}={file.hash.value}")
+                checked.add(located)
+            if site and name == project:
+                # Its code is the commit's: its install may only describe it
+                relative = located.relative_to(site)
+                assert relative.parts[0].endswith(".dist-info") or (
+                    len(relative.parts) == 1 and located.suffix == ".pth"
+                ), f"{name}'s install adds {relative} to site-packages"
             if name == project and located.suffix == ".pth":
                 # site.py runs a line that starts with "import"; any other
                 # line only adds a directory to the path
@@ -269,9 +280,11 @@ def check_interpreter():
 
 
 def checked_file(tracked: set[Path], checked: set[Path]):
-    """Whether a file is the interpreter's own library, one a ``RECORD``
-    checked, one of the commit's, uv's shim (whose sha256 the environment
-    records) or this script."""
+    """Whether a file is the interpreter's own library, a package's file in
+    site-packages that a ``RECORD`` checked and the environment's digest
+    covers (not the project's, nor one outside site-packages), one of the
+    commit's, uv's shim (whose sha256 the environment records) or this
+    script."""
     paths = sysconfig.get_paths()
     interpreter = [Path(paths[key]).resolve() for key in ("stdlib", "platstdlib")]
     sites = {Path(paths[key]).resolve() for key in ("purelib", "platlib")}

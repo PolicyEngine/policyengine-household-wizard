@@ -182,7 +182,9 @@ its checks. Before it imports the dashboard, it checks four things:
   itself and the list of sources in the project's egg-info, and is as the
   `RECORD` says, the project's own install included. Every `.pth` file
   belongs to an installed package or is uv's shim, and the project's has
-  no line that runs code. These checks run once the interpreter has
+  no line that runs code. The project's install adds nothing to
+  site-packages but its metadata and that `.pth` file: its code is the
+  commit's. These checks run once the interpreter has
   started, so a `.pth` file they stop on has already run. They do not check
   the files against the wheels the lock pins: a package changed along with
   its `RECORD` passes them, but changes the digest `environment` records
@@ -191,8 +193,9 @@ its checks. Before it imports the dashboard, it checks four things:
   imported from those installs.
 
 Once it is done, it checks that every module loaded from a file, and every
-file opened through Python, was the interpreter's own, a checked install's,
-one of the commit's or the capture itself. A module whose spec or
+file opened through Python, was the interpreter's own, a package's file in
+site-packages that the environment's digest covers (not one a `RECORD`
+lists elsewhere), one of the commit's or the capture itself. A module whose spec or
 `__file__` names anything but a regular file, such as a path in an archive,
 stops it.
 
