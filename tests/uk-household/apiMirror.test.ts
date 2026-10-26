@@ -85,10 +85,11 @@ describe('the household impact API mirror', () => {
   it('has read all the dashboard code that runs while the API answers', () => {
     const sha256 = (code: string) => createHash('sha256').update(code, 'utf8').digest('hex');
     const ran = Object.fromEntries(Object.entries(API.code).map(([name, code]) => [name, sha256(code)]));
-    expect(ran).toEqual(REVIEWED_DASHBOARD_CODE);
+    const changed = differing(REVIEWED_DASHBOARD_CODE, ran);
+    expect(ran, `Read the code the fixture records for ${changed.join(', ')}`).toEqual(REVIEWED_DASHBOARD_CODE);
   });
 
-  it('has read every file of the dashboard’s the API loads or reads', () => {
+  it('has read every file of the dashboard’s the API loads or opens', () => {
     const { commit, files } = REVIEWED_DASHBOARD_FILES;
     expect(commit).toMatch(/^[0-9a-f]{40}$/);
     const changed = differing(files, API.files);
@@ -97,15 +98,23 @@ describe('the household impact API mirror', () => {
 
   it('has read the environment the API runs in', () => {
     const { commit, ...reviewed } = REVIEWED_DASHBOARD_ENVIRONMENT;
+    const captured = API.environment;
     expect(commit).toMatch(/^[0-9a-f]{40}$/);
-    const changed = differing(reviewed.packages, API.environment.packages);
+    // Each package whose version or files differ, then whatever else differs
+    const packages = [...differing(reviewed.packages, captured.packages), ...differing(reviewed.contents, captured.contents)];
+    const changed = [...new Set(packages)].sort();
     for (const key of ['python', 'platform'] as const) {
-      if (API.environment[key] !== reviewed[key]) changed.push(API.environment[key]);
+      if (captured[key] !== reviewed[key]) changed.push(captured[key]);
     }
-    changed.push(...differing(reviewed.shims, API.environment.shims));
+    changed.push(...differing(reviewed.flags, captured.flags).map((flag) => `sys.flags.${flag}`));
+    changed.push(...differing(reviewed.xoptions, captured.xoptions).map((option) => `-X ${option}`));
+    for (const key of ['warnoptions', 'entry_points'] as const) {
+      if (JSON.stringify(captured[key]) !== JSON.stringify(reviewed[key])) changed.push(key);
+    }
+    changed.push(...differing(reviewed.shims, captured.shims));
     const diff = `git diff ${commit} ${API.source.commit} -- ${Object.keys(reviewed.inputs).join(' ')}`;
     const read = changed.length ? `what changed in ${changed.join(', ')}, and ${diff}` : diff;
-    expect(API.environment, `Read ${read}`).toEqual(reviewed);
+    expect(captured, `Read ${read}`).toEqual(reviewed);
   });
 
   it('implements every pydantic feature the models use', () => {

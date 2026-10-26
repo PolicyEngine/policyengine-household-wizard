@@ -14,9 +14,12 @@ it:
   uses, which ``reference/householdImpactApi.ts`` mirrors;
 - ``code``: the code of the dashboard's other functions that ran while it
   answered the cases, and ``files``: the sha256 of each of the commit's
-  files its process loaded or opened, which the mirror lists as read;
-- ``environment``: the interpreter, the platform and the version of each
-  package installed, which the mirror also lists as read;
+  files its process loaded or opened through Python, which the mirror lists
+  as read;
+- ``environment``: the interpreter, its flags and options, the platform,
+  each package installed (its version and a digest of its files), the
+  dashboard's entry points, uv's shim and the commit's files that decide
+  them, which the mirror also lists as read;
 - ``base`` and ``cases``: a valid body, and changes to it (one field set to
   each kind of value pydantic might take or refuse, each household field
   again with a partner, children, unknown and prototype keys, the year
@@ -39,17 +42,23 @@ Run it from the wizard's root; it needs git and uv:
 
 It exports the commit's files to a temporary directory with ``git archive``,
 so the dashboard's checkout is not touched, and runs itself there with
-``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins,
-with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode runs.
+``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins.
+It runs with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode
+runs, with ``-X utf8``, and without the ``PYTHON*`` environment variables
+apart from ``PYTHONPATH``, so the interpreter runs in the same mode each
+time. It stops if Python runs optimized (``-O``), which drops its checks.
 ``--source DIR`` uses an export made before, and ``--python`` the
 interpreter of an environment already synced to its lock, so the capture
 can run without a network. Either way, before it imports the dashboard, it
 checks that the files are the commit's, that every installed package is the
-PyPI release ``uv.lock`` pins and each file its ``RECORD`` hashes is as the
-``RECORD`` says, and that the packages deciding the verdicts are imported
-from those installs. At the end it checks that every module loaded from a
-file, and every file opened through Python, was the interpreter's, a
-checked install's, the commit's or this script.
+version ``uv.lock`` pins, which the lock takes from PyPI, that each file its
+``RECORD`` hashes is as the ``RECORD`` says, and that the packages deciding
+the verdicts are imported from those installs. It does not check the files
+against the wheels the lock pins: a package and its ``RECORD`` changed
+together pass, but change the digest the environment records. At the end it
+checks that every module loaded from a file, and every file opened through
+Python, was the interpreter's, a checked install's, the commit's or this
+script.
 """
 
 import argparse
@@ -160,26 +169,39 @@ def sha256(path: Path) -> str:
 
 
 def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict, set[Path]]:
-    """Stop unless every package installed here is the PyPI release the
-    dashboard's ``uv.lock`` pins at the commit, each file a ``RECORD``
-    hashes (the project's own install's too) is as the ``RECORD`` says,
-    every ``.pth`` file belongs to an installed package or is uv's shim, and
-    the deciding packages are imported from those installs. It runs once
-    the interpreter has started, so a ``.pth`` file it stops on has run.
-    Returns the environment (the interpreter, the platform, each package's
-    version, the shim's sha256 and that of the commit's files that decide
-    the rest) and the files checked."""
+    """Stop unless:
+
+    - every package installed here is the version the dashboard's
+      ``uv.lock`` pins at the commit, which the lock takes from PyPI;
+    - every file a package's ``RECORD`` lists has a hash (the ``RECORD``
+      itself apart) and is as the ``RECORD`` says, the project's own
+      install included;
+    - every ``.pth`` file belongs to an installed package or is uv's shim,
+      and the project's runs no code;
+    - the deciding packages are imported from those installs.
+
+    It runs once the interpreter has started, so a ``.pth`` file it stops on
+    has run. Returns the environment and the files checked. The environment
+    is the interpreter, its flags and the platform; each package's version
+    and the sha256 of its files in site-packages, so a file changed along
+    with its ``RECORD`` still changes the record; the project's entry
+    points; the shim's sha256; and that of the commit's files that decide
+    the rest."""
     lock = tomllib.loads(git(dashboard, "show", f"{commit}:uv.lock"))
     locked = {canonical(package["name"]): package for package in lock["package"]}
     project = canonical(tomllib.loads(git(dashboard, "show", f"{commit}:pyproject.toml"))["project"]["name"])
+    sites = {Path(sysconfig.get_paths()[key]).resolve() for key in ("purelib", "platlib")}
     # Every copy on the path, so one shadowing another is checked too. The
     # project's own (its install, and the egg-info a build leaves in src/)
-    # is imported from the source, which check_source checks
-    installed, owned, checked = {}, set(), set()
+    # is imported from the source, which check_source checks; its install
+    # names the export's path, so only its entry points are recorded
+    installed, contents, entry_points, owned, checked = {}, {}, set(), set(), set()
     for dist in importlib.metadata.distributions():
         name = canonical(dist.metadata["Name"])
         owned.update(Path(dist.locate_file(file)).resolve() for file in dist.files or [])
-        if name != project:
+        if name == project:
+            entry_points |= {f"{point.group}: {point.name} = {point.value}" for point in dist.entry_points}
+        else:
             assert name not in installed, f"{name} is installed twice ({installed[name]}, {dist.version})"
             installed[name] = dist.version
             pinned = locked.get(name, {})
@@ -187,11 +209,16 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
                 f"{name} {dist.version} is installed, but uv.lock pins {pinned.get('version')}"
             )
             assert pinned.get("source") == PYPI, f"uv.lock takes {name} from {pinned.get('source')}, not PyPI"
-        for file in dist.files or []:
+        if dist.read_text("RECORD") is None:
+            # The egg-info lists the project's sources, which check_source checks
+            assert name == project, f"{name} has no RECORD to check its files against"
+            continue
+        listed = []
+        for file in dist.files:
             if file.hash is None:
-                # A RECORD lists itself without a hash; the egg-info lists
-                # the project's sources, which check_source checks
-                assert file.name == "RECORD" or name == project, f"{name}'s RECORD gives {file} no hash"
+                assert file.name == "RECORD" and file.parent.name.endswith(".dist-info"), (
+                    f"{name}'s RECORD gives {file} no hash"
+                )
                 continue
             located = Path(dist.locate_file(file)).resolve()
             digest = hashlib.new(file.hash.mode, located.read_bytes()).digest()
@@ -199,11 +226,21 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
                 f"{located} is not the file {name} {dist.version} installed"
             )
             checked.add(located)
+            site = next((site for site in sites if located.is_relative_to(site)), None)
+            if site:
+                listed.append(f"{located.relative_to(site).as_posix()}\t{file.hash.mode}={file.hash.value}")
+            if name == project and located.suffix == ".pth":
+                # site.py runs a line that starts with "import"; any other
+                # line only adds a directory to the path
+                lines = located.read_bytes().decode("utf-8-sig").splitlines()
+                assert not any(line.startswith(("import ", "import\t")) for line in lines), f"{located} runs code"
+        if name != project:
+            contents[name] = hashlib.sha256("\n".join(sorted(listed)).encode()).hexdigest()
     shims = {}
-    for directory in sorted({sysconfig.get_paths()[key] for key in ("purelib", "platlib")}):
-        for pth in Path(directory).glob("*.pth"):
+    for directory in sorted(sites):
+        for pth in directory.glob("*.pth"):
             assert pth.name in VENV_SHIMS or pth.resolve() in owned, f"{pth} belongs to no installed package"
-        shims |= {name: sha256(shim) for name in sorted(VENV_SHIMS) if (shim := Path(directory) / name).is_file()}
+        shims |= {name: sha256(shim) for name in sorted(VENV_SHIMS) if (shim := directory / name).is_file()}
     for name in DECIDING:
         module = importlib.import_module(name.replace("-", "_"))
         dist = importlib.metadata.distribution(name)
@@ -211,12 +248,24 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
         assert Path(module.__file__).resolve() in files, f"{module.__name__} is imported from {module.__file__}"
     environment = {
         "python": f"{sys.implementation.name} {platform.python_version()}",
+        "flags": {flag: getattr(sys.flags, flag) for flag in type(sys.flags).__match_args__},
+        "xoptions": {key: value for key, value in sys._xoptions.items() if key != "pycache_prefix"},
+        "warnoptions": list(sys.warnoptions),
         "platform": sysconfig.get_platform(),
         "packages": dict(sorted(installed.items())),
+        "contents": dict(sorted(contents.items())),
+        "entry_points": sorted(entry_points),
         "shims": shims,
         "inputs": {name: sha256(source / name) if (source / name).is_file() else None for name in ENVIRONMENT_INPUTS},
     }
     return environment, checked
+
+
+def check_interpreter():
+    """Stop if Python runs optimized: ``-O`` and ``PYTHONOPTIMIZE`` drop
+    every ``assert``, and with them the checks here."""
+    if sys.flags.optimize:
+        raise SystemExit("Run without -O or PYTHONOPTIMIZE, which drop the capture's checks")
 
 
 def checked_file(tracked: set[Path], checked: set[Path]):
@@ -842,6 +891,7 @@ class Api:
 
 
 def capture(dashboard: Path, commit: str, source: Path, out: Path):
+    check_interpreter()
     check_bytecode()
     tracked = check_source(dashboard, commit, source)
     environment, checked = check_environment(dashboard, commit, source)
@@ -939,6 +989,7 @@ def main():
     parser.add_argument("--output", type=Path, default=OUT, help="where to write the fixture")
     parser.add_argument("--inner", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    check_interpreter()
     dashboard = args.dashboard.expanduser().resolve()
     commit = resolve_commit(dashboard, args.commit)
     out = args.output.expanduser().resolve()
@@ -950,11 +1001,16 @@ def main():
         if not args.source:
             export(dashboard, commit, source)
         python = [args.python] if args.python else ["uv", "run", "--frozen", "--exact", "--project", str(source), "python"]
-        # No cached bytecode read or written: every module runs from its source
-        python += ["-B", "-X", f"pycache_prefix={cache}"]
+        # One interpreter mode whatever the shell sets: no cached bytecode
+        # read or written, so every module runs from its source; UTF-8 mode
+        # whatever the locale; and no PYTHON* setting but PYTHONPATH, which
+        # an export of a changed commit needs (the environment records the
+        # flags that result)
+        python += ["-B", "-X", "utf8", "-X", f"pycache_prefix={cache}"]
+        env = {key: value for key, value in os.environ.items() if not key.startswith("PYTHON") or key == "PYTHONPATH"}
         inner = [__file__, "--inner", "--dashboard", str(dashboard), "--commit", commit, "--source", str(source)]
         inner += ["--output", str(out)]
-        sys.exit(subprocess.run([*python, *inner]).returncode)
+        sys.exit(subprocess.run([*python, *inner], env=env).returncode)
 
 
 if __name__ == "__main__":

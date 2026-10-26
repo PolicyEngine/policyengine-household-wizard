@@ -97,8 +97,8 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   on a changed validator until the mirror copies it, and on a change to any
   other dashboard code that runs while the API answers, any dashboard file
   the API loads or opens through Python, or the environment it runs in
-  (the interpreter and every package version), until it is read and its
-  hash or version recorded (`REVIEWED_DASHBOARD_CODE`,
+  (the interpreter and its flags, and every package's version and files),
+  until it is read and its hash or version recorded (`REVIEWED_DASHBOARD_CODE`,
   `REVIEWED_DASHBOARD_FILES`, `REVIEWED_DASHBOARD_ENVIRONMENT`).
 - New country → mirror the structure of `src/us-household/` and
   `src/uk-household/` rather than mixing into either.
