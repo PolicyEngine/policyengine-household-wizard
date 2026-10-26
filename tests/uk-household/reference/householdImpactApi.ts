@@ -441,11 +441,12 @@ def _known_measures(cls, policies: Optional[list[str]]):
 /**
  * The sha256 of the code of each of the dashboard's functions that ran while
  * the API answered the cases (`API.code`), apart from the validators, as read
- * at bd346f30. Apart from FastAPI's validation, which this mirror follows,
- * that code refuses only a malformed `definition` query (a 400), which the
- * package never sends. The rest checks the request again from its own JSON,
- * builds the answers, picks the measures and the workers, times the
- * calculation, keeps answers by request, and stops the workers at shutdown.
+ * at bd346f30 and unchanged at 5ee4e23e. Apart from FastAPI's validation,
+ * which this mirror follows, that code refuses only a malformed `definition`
+ * query (a 400), which the package never sends. The rest checks the request
+ * again from its own JSON, builds the answers, picks the measures and the
+ * workers, times the calculation, keeps answers by request, and stops the
+ * workers at shutdown.
  * When the dashboard changes one, add one or runs another, apiMirror.test.ts
  * fails: read the new code in the fixture's `code`, follow in this mirror
  * anything it refuses before the calculation, then record its hash here.
@@ -491,10 +492,10 @@ export const REVIEWED_DASHBOARD_CODE: Record<string, string> = {
  * then record the new commit and hashes here.
  */
 export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, string> } = {
-  commit: 'bd346f300708b2fe4ad358e850bca546b9ffc3d4',
+  commit: '5ee4e23ed8e11d2c7cff3b837ed7902f4a138de1',
   files: {
     'src/uk_budget_data/__init__.py': '12a819e71709b113828c6354c5ed4b8c946a3be6c08d85ffa1012b8bc3673807',
-    'src/uk_budget_data/api.py': '7d5e9ad61f89087ff98746b4c8253da53db0e91ae41d5ec44bb568214af803d8',
+    'src/uk_budget_data/api.py': 'a5c0433f62ccce96081f6974ec41e02f4d98586e494de394e69b003d0da53a42',
     'src/uk_budget_data/budget_measures/__init__.py': 'd74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1',
     'src/uk_budget_data/budget_measures/connect_student_loan_repayments.py': 'cc91e585d308001c8e7a902d0a621cce142b39b67b979236389e0fb68a8ec4e2',
     'src/uk_budget_data/budget_measures/employer_ni_relief_ages_21_to_24.py': '063816a303c646ea6f1aa9127f6e45d9e9345d01bd6bba8de5516a8c7b3a5db2',
@@ -502,19 +503,19 @@ export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, s
     'src/uk_budget_data/budget_measures/road_fuel_vat_cut.py': 'f50f794036f796d0d543354b221fda147dc1e9f8a0ab57bbbb96c5179f976c4b',
     'src/uk_budget_data/budget_measures/state_pension_income_tax_allowance.py': '11a23d0325e44707502c42d5e7a854b528d865a678ae42ea311393fd1495bdee',
     'src/uk_budget_data/budget_measures/warm_home_discount_top_up.py': 'a9ce3d9d5428bc8190160864839fac8e668e57ad9ecc44ceec13a0362f027f47',
-    'src/uk_budget_data/budget_measures/zero_vat_on_domestic_electricity.py': '5a16b69c676aa0dde9a450713f8de11e39c36bc27564ec0aaa4e52644f245b25',
+    'src/uk_budget_data/budget_measures/zero_vat_on_domestic_electricity.py': '4e797e1451cbcf1f5d3fd56198e8a058c290ef67e03f50a2a29d754226c00115',
     'src/uk_budget_data/budget_years.json': '8f03e13e0cbb80c286625a7773a717c285d4aae1420055825c3a0106a7c87823',
     'src/uk_budget_data/budget_years.py': '787128ae63dd872ecfcaf02210141492e394f74973b70f63438a94e2d8c4c5fb',
-    'src/uk_budget_data/calculators.py': 'aa2d7378bbe58eb858a0c7980bb062b9b5a0ce7034885647abc48559c7ba8845',
+    'src/uk_budget_data/calculators.py': 'f1ad77647ecc3588cb1b29d2305bf721ffb3b9073326860b33e7cb0b858e8aa9',
     'src/uk_budget_data/certified_data.py': '8fa8d7ffac7ea14402474026ae518bf0b11a2f5361b2af3cf06bc9bc9f07e7f3',
     'src/uk_budget_data/data_limits.py': 'e5ba0998e2e0369f53a7a66f4a743d53d3a3fc3e12ae59858b1f75e73d20ed93',
     'src/uk_budget_data/definitions.py': '8ce794cc07bcbed14851ef535da2bc3e7476b64e9966d9a919ddeaba14ac8ddc',
-    'src/uk_budget_data/household_impact.py': '3481e192ca45e324f2665583ab4bcefd7e135c5a5a4b5958cdfb93314a455c49',
-    'src/uk_budget_data/measure_templates.py': 'bb839020902fbf8bddee1fa173cefe368674b5a14f9b2d80e4b02341c7fdfd25',
+    'src/uk_budget_data/household_impact.py': '3fea979bc4c7ba260c92a62b6fb249f4d11048ce881ec0be865de5bf10bfa8a6',
+    'src/uk_budget_data/measure_templates.py': 'af8c09419d664a8ef08491a5ecdea047523b55f0d8d871fc5bbfe54997539421',
     'src/uk_budget_data/model_limits.py': '4c0a8ac198b5592d952f228ee6ca79aa31ac77c7819357be9d3b163c6a884013',
     'src/uk_budget_data/models.py': '093c55bb28182a0da865681f92c2c5f52249c2346c12dc9361da6e6698d5bed0',
     'src/uk_budget_data/personal_impact.py': '35818e981dda71520e23bac6f244d5997d7d7f7ca3e1006925e101e63e6dbc47',
-    'src/uk_budget_data/pipeline.py': '79c8cbebe7e64dd36248b9542b85b678df6c87df0696956e6c8a023a2c7376fd',
+    'src/uk_budget_data/pipeline.py': '033a66a29afe98cdef8852c3fd3eebffa4ae38ce4971ef9aa48cd0e8a17503ff',
     'src/uk_budget_data/private_outputs.py': 'f169e8673edc11904d3fc5ef468f0e3ba8edb48904b1ee5fdea59e61b257389a',
     'src/uk_budget_data/publication/__init__.py': 'd74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1',
     'src/uk_budget_data/publication/artifacts.py': 'cec2ef638efb74640243bec4574178da585af1609416c65c85f80c3c2a3939f9',
@@ -522,7 +523,7 @@ export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, s
     'src/uk_budget_data/publication/receipt.py': '4687a754857a7a209f4008ab7ad38410e1b3017c1c6bab22a6452874380e45a5',
     'src/uk_budget_data/publication/tables.py': '7fcfb924582ea222fcc3668aabddaf7c8839c10dc20111feab0de26d81dc621a',
     'src/uk_budget_data/publication/template_proof.py': '26e562365009cddce62330b7956fabe65360841f7b4ea2c36622ae4c4d2a8a3a',
-    'src/uk_budget_data/reforms.py': '47da57f216db99197cf697e7004d2ba62e19ae17302f4355cf69a4541922c07b',
+    'src/uk_budget_data/reforms.py': '910b90c0b5777773d6a6c25539dc2dac9f3117c59a499be67f64ecf3676af94b',
     'src/uk_budget_data/runtime_identity.py': 'dfd5e5438166dbf3baeb791e7ef0d5db8eb778508d432519def683c1de96a769',
     'src/uk_budget_data/scored_years.py': 'b37938878a2e18e13b75d59f2fe0a8386cc6bc2c4b34b5b377c0866654c2e6fe',
   },
@@ -549,7 +550,7 @@ export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, s
  * calculation, then record the new commit and environment here.
  */
 export const REVIEWED_DASHBOARD_ENVIRONMENT: { commit: string } & ApiCapture['environment'] = {
-  commit: 'bd346f300708b2fe4ad358e850bca546b9ffc3d4',
+  commit: '5ee4e23ed8e11d2c7cff3b837ed7902f4a138de1',
   python: 'cpython 3.13.9',
   flags: {
     debug: 0,

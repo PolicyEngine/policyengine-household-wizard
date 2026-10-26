@@ -266,7 +266,7 @@ runs and reads, so a change no case shows still fails the test:
   a library, a function wrapped at import, a module the API loads from
   outside `src/`. An audit hook sees the files opened. It sees `open` and
   `os.open`, which pandas and numpy use, but not a C library that opens a
-  file itself, as h5py's HDF5 does. At bd346f30 the API calls no
+  file itself, as h5py's HDF5 does. At 5ee4e23e the API calls no
   `h5py.File`; if it ever reads data that way, add those files by hand.
 - `environment`: the interpreter, its flags (`sys.flags`), its `-X` and
   `-W` options, and the platform; each package installed besides the
