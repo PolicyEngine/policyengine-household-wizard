@@ -44,19 +44,21 @@ It exports the commit's files to a temporary directory with ``git archive``,
 so the dashboard's checkout is not touched, and runs itself there with
 ``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins.
 The ``uv`` first on ``PATH`` makes that venv, and ``environment`` records
-the shim it writes, so use the uv the reviewed one was made with. It runs with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode
-runs, with ``-X utf8``, and without the ``PYTHON*`` environment variables
-apart from ``PYTHONPATH``, so the interpreter runs in the same mode each
-time. It stops if Python runs optimized (``-O``), which drops its checks.
-``--source DIR`` uses an export made before, and ``--python`` the
-interpreter of an environment already synced to its lock, so the capture
-can run without a network. Either way, before it imports the dashboard, it
-checks that the files are the commit's, that the environment sees no
-site-packages but its own, that every installed package is the version
-``uv.lock`` pins, which the lock takes from PyPI, that each file its
-``RECORD`` hashes is as the ``RECORD`` says, and that the packages deciding
-the verdicts are imported from those installs, and that the project's
-install adds nothing to site-packages but its metadata and ``.pth`` file.
+the shim it writes, which not every uv version writes alike: use the uv
+the reviewed venv was made with, 0.11.7. It runs with ``-B`` and an empty
+``pycache_prefix``, so no cached bytecode runs, with ``-X utf8``, and
+without the ``PYTHON*`` environment variables apart from ``PYTHONPATH``, so
+the interpreter runs in the same mode each time. It stops if Python runs
+optimized (``-O``), which drops its checks. ``--source DIR`` uses an
+export made before, and ``--python`` the interpreter of an environment
+already synced to its lock, so the capture can run without a network.
+Either way, before it imports the dashboard, it checks that the files are
+the commit's, that the environment sees no site-packages but its own, that
+every installed package is the version ``uv.lock`` pins, which the lock
+takes from PyPI, that each file its ``RECORD`` hashes is as the ``RECORD``
+says, and that the packages deciding the verdicts are imported from those
+installs, and that the project's install adds nothing to site-packages but
+its metadata and ``.pth`` file.
 It does not check the files against the wheels the lock pins: a package and
 its ``RECORD`` changed together pass, but change the digest the environment
 records. At the end it checks that every module loaded from a file, and
@@ -183,7 +185,8 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
     - every package installed here is the version the dashboard's
       ``uv.lock`` pins at the commit, which the lock takes from PyPI;
     - every package has a ``RECORD`` but the project's egg-info, which
-      must be in a directory the project's install adds to the path;
+      must be in a directory the project's install adds to the path, or
+      in the export's ``src``;
     - every file a package's ``RECORD`` lists has a hash (the ``RECORD``
       itself apart) and is as the ``RECORD`` says, the project's own
       install included;
@@ -272,11 +275,16 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
                 }
         if name != project:
             contents[name] = hashlib.sha256("\n".join(sorted(listed)).encode()).hexdigest()
+    # The egg-info a build leaves beside the project's sources, which
+    # check_source checks: those the project's .pth files add, or the
+    # export's own, where check_source lets one be (an export synced once,
+    # then run on PYTHONPATH with another venv). Its own list of them is
+    # not used
+    beside = added | {(source / "src").resolve()}
     for metadata in unrecorded:
-        # The egg-info a build leaves beside the project's sources, which
-        # check_source checks; its own list of them is not used
-        assert metadata.suffix == ".egg-info" and metadata.parent in added, (
-            f"{metadata} has no RECORD, and is not an egg-info beside the sources {project}'s install adds"
+        assert metadata.suffix == ".egg-info" and metadata.parent in beside, (
+            f"{metadata} has no RECORD, and is not an egg-info beside the export's sources "
+            f"or those {project}'s install adds"
         )
     shims = {}
     for directory in sorted(sites):

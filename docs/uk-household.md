@@ -181,8 +181,9 @@ its checks. Before it imports the dashboard, it checks five things:
 - every package installed is the version the lock pins, which the lock
   takes from PyPI, each copy if one shadows another;
 - each package has a `RECORD`, apart from the project's egg-info, which
-  must be beside the sources the project's install adds to the path (its
-  own list of them is not used). Each file a `RECORD` lists has a hash,
+  must be beside the sources the project's install adds to the path, or
+  in the export's `src`, where the first check lets one be (its own list
+  of them is not used). Each file a `RECORD` lists has a hash,
   apart from the `RECORD` itself, and is as the `RECORD` says, the
   project's own install included. Every `.pth` file is a file a `RECORD`
   hashes, or uv's shim, and the project's has no line that runs code. The
@@ -276,8 +277,9 @@ runs and reads, so a change no case shows still fails the test:
   it; the entry points of the dashboard's own install, whose files name the
   export's path and are otherwise not recorded; the sha256 of uv's shim
   (`_virtualenv.py` and its `.pth`), which uv writes, so a capture whose
-  venv another uv version made fails the test, naming `_virtualenv.py`
-  (the reviewed venv is uv 0.11.7's; uv 0.12.13 writes another shim); and
+  venv was made by a uv that writes another shim fails the test, naming
+  `_virtualenv.py` (the reviewed venv is uv 0.11.7's; 0.12.13 writes
+  another shim); and
   that of the commit's `.python-version`, `pyproject.toml` and `uv.lock`,
   which decide the rest.
   The mirror lists them with the commit they were read at
