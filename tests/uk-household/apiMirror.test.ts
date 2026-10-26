@@ -6,6 +6,7 @@ import {
   MIRRORED_FEATURES,
   MIRRORED_VALIDATORS,
   REVIEWED_DASHBOARD_CODE,
+  REVIEWED_DASHBOARD_FILES,
   apiRefusals,
   apiVerdict,
   type ApiCase,
@@ -80,6 +81,10 @@ describe('the household impact API mirror', () => {
     const sha256 = (code: string) => createHash('sha256').update(code, 'utf8').digest('hex');
     const ran = Object.fromEntries(Object.entries(API.code).map(([name, code]) => [name, sha256(code)]));
     expect(ran).toEqual(REVIEWED_DASHBOARD_CODE);
+  });
+
+  it('has read every file of the dashboard’s the API loads or reads', () => {
+    expect(API.files).toEqual(REVIEWED_DASHBOARD_FILES.files);
   });
 
   it('implements every pydantic feature the models use', () => {

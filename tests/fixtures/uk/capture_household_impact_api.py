@@ -13,7 +13,8 @@ it:
   the code of its validators, and the pydantic features its core schema
   uses, which ``reference/householdImpactApi.ts`` mirrors;
 - ``code``: the code of the dashboard's other functions that ran while it
-  answered the cases, which the mirror lists as read;
+  answered the cases, and ``files``: the sha256 of each of the commit's
+  files its process loaded or opened, which the mirror lists as read;
 - ``base`` and ``cases``: a valid body, and changes to it (one field set to
   each kind of value pydantic might take or refuse, each household field
   again with a partner, children, unknown and prototype keys, the year
@@ -24,10 +25,10 @@ it:
 Only the calculation is replaced (``household_impact.calculate_household_impact``),
 so the API answers at once. Everything else runs as the dashboard wrote
 it: the app and its lifespan, its middleware, FastAPI's validation of the
-body and the endpoint's own code before and after the calculation. The script stops if a case
-is refused anywhere but FastAPI's validation, since the mirror covers only
-that. ``tests/uk-household/apiMirror.test.ts`` checks that the mirror gives
-every case the same verdict.
+body and the endpoint's own code before and after the calculation. The
+script stops if a case is refused anywhere but FastAPI's validation, since
+the mirror covers only that. ``tests/uk-household/apiMirror.test.ts``
+checks that the mirror gives every case the same verdict.
 
 Run it from the wizard's root; it needs git and uv:
 
@@ -36,26 +37,32 @@ Run it from the wizard's root; it needs git and uv:
 
 It exports the commit's files to a temporary directory with ``git archive``,
 so the dashboard's checkout is not touched, and runs itself there with
-``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins.
+``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins,
+with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode runs.
 ``--source DIR`` uses an export made before, and ``--python`` the
 interpreter of an environment already synced to its lock, so the capture
 can run without a network. Either way it checks that the files are the
-commit's, that every installed package is the version ``uv.lock`` pins,
-and that the packages deciding the verdicts are imported from those
-installs.
+commit's, that every installed package is the version ``uv.lock`` pins and
+each of its files is as its ``RECORD`` says, that the packages deciding the
+verdicts are imported from those installs, and, at the end, that every
+module loaded was the interpreter's, a checked install, the commit's or
+this script.
 """
 
 import argparse
 import ast
+import base64
 import copy
 import hashlib
 import importlib.metadata
 import inspect
 import json
+import os
 import random
 import re
 import subprocess
 import sys
+import sysconfig
 import tarfile
 import tempfile
 import textwrap
@@ -95,9 +102,9 @@ def export(dashboard: Path, commit: str, into: Path):
 BUILT = re.compile(r"(^\.venv/|^src/[^/]+\.egg-info/|(^|/)__pycache__/)")
 
 
-def check_source(dashboard: Path, commit: str, source: Path):
+def check_source(dashboard: Path, commit: str, source: Path) -> set[Path]:
     """Stop unless ``source`` holds exactly the commit's files, apart from
-    what syncing it builds."""
+    what syncing it builds; the files, resolved."""
     tracked = {}
     for entry in git(dashboard, "ls-tree", "-r", "-z", "--full-tree", commit).split("\0"):
         if entry:
@@ -117,41 +124,101 @@ def check_source(dashboard: Path, commit: str, source: Path):
     for path, blob in tracked.items():
         data = (source / path).read_bytes()
         assert hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest() == blob, f"{path} differs from the commit's"
+    return {(source / path).resolve() for path in tracked}
+
+
+def check_bytecode():
+    """Stop unless Python reads and writes no cached bytecode: ``-B``, and
+    ``-X pycache_prefix`` an empty directory, so every module runs from its
+    source. ``-B`` alone still reads a ``__pycache__`` beside the source,
+    which ``check_source`` lets through and need not match it."""
+    assert sys.dont_write_bytecode, "Run with -B"
+    prefix = sys.pycache_prefix
+    assert prefix and Path(prefix).is_dir(), "Run with -X pycache_prefix=<an empty directory>"
+    assert not any(Path(prefix).iterdir()), f"{prefix} holds cached bytecode"
 
 
 def canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def check_environment(dashboard: Path, commit: str) -> dict[str, str]:
+# What uv puts in a virtual environment beside the packages it installs
+VENV_SHIMS = {"_virtualenv.pth", "_virtualenv.py"}
+
+
+def check_environment(dashboard: Path, commit: str) -> tuple[dict[str, str], set[Path]]:
     """Stop unless every package installed here is the version the
-    dashboard's ``uv.lock`` pins at the commit, and the deciding packages
-    are imported from those installs; the deciding versions."""
+    dashboard's ``uv.lock`` pins at the commit, each of its files is as its
+    ``RECORD`` says, no other ``.pth`` file can run code at startup, and the
+    deciding packages are imported from those installs; the deciding
+    versions, and the files checked."""
     lock = tomllib.loads(git(dashboard, "show", f"{commit}:uv.lock"))
     locked = {canonical(package["name"]): package.get("version") for package in lock["package"]}
     project = canonical(tomllib.loads(git(dashboard, "show", f"{commit}:pyproject.toml"))["project"]["name"])
     # Every copy on the path, so one shadowing another is checked too. The
     # project's own (its install, and the egg-info a build leaves in src/)
     # is imported from the source, which check_source checks
-    installed = {}
+    installed, owned, checked = {}, set(), set()
     for dist in importlib.metadata.distributions():
         name = canonical(dist.metadata["Name"])
+        owned.update(Path(dist.locate_file(file)).resolve() for file in dist.files or [])
         if name == project:
             continue
         assert name not in installed, f"{name} is installed twice ({installed[name]}, {dist.version})"
         installed[name] = dist.version
-        assert locked.get(name) == dist.version, f"{name} {dist.version} is installed, but uv.lock pins {locked.get(name)}"
+        pinned = locked.get(name)
+        assert pinned == dist.version, f"{name} {dist.version} is installed, but uv.lock pins {pinned}"
+        for file in dist.files or []:
+            if file.hash is not None:
+                located = Path(dist.locate_file(file)).resolve()
+                digest = hashlib.new(file.hash.mode, located.read_bytes()).digest()
+                assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == file.hash.value, (
+                    f"{located} is not the file {name} {dist.version} installed"
+                )
+                checked.add(located)
+    for directory in {sysconfig.get_paths()[key] for key in ("purelib", "platlib")}:
+        for pth in Path(directory).glob("*.pth"):
+            assert pth.name in VENV_SHIMS or pth.resolve() in owned, f"{pth} belongs to no installed package"
     for name in DECIDING:
         module = importlib.import_module(name.replace("-", "_"))
-        files = {Path(importlib.metadata.distribution(name).locate_file(file)).resolve() for file in importlib.metadata.files(name)}
-        assert Path(module.__file__).resolve() in files, f"{module.__name__} is imported from {module.__file__}, not its install"
-    return {name: installed[name] for name in DECIDING}
+        dist = importlib.metadata.distribution(name)
+        files = {Path(dist.locate_file(file)).resolve() for file in dist.files}
+        assert Path(module.__file__).resolve() in files, f"{module.__name__} is imported from {module.__file__}"
+    return {name: installed[name] for name in DECIDING}, checked
+
+
+def check_loaded(tracked: set[Path], checked: set[Path]):
+    """Stop unless every module loaded is the interpreter's own, a file an
+    installed package's ``RECORD`` checked, one of the commit's files, or
+    this script."""
+    paths = sysconfig.get_paths()
+    interpreter = [Path(paths[key]).resolve() for key in ("stdlib", "platstdlib")]
+    sites = {Path(paths[key]).resolve() for key in ("purelib", "platlib")}
+    for name, module in list(sys.modules.items()):
+        file = getattr(module, "__file__", None)
+        if not file or not Path(file).is_file():
+            continue
+        located = Path(file).resolve()
+        if located.parent in sites and located.name in VENV_SHIMS:
+            continue
+        assert (
+            located in checked
+            or located in tracked
+            or located == Path(__file__).resolve()
+            or (
+                not any(located.is_relative_to(site) for site in sites)
+                and any(located.is_relative_to(lib) for lib in interpreter)
+            )
+        ), f"{name} is loaded from {located}, which nothing checked"
 
 
 # --- What the mirror reads from the models ---------------------------------------
 
 
-# Keys of the core schema that hold other nodes, or that only document it
+# Keys of the core schema that hold other nodes, or that only document it.
+# pydantic-core does not read ``metadata`` (core_schema.py: "not used by
+# pydantic-core"); ``serialization`` is how a value is dumped, which the
+# endpoint does before it checks the request again
 NESTED = {"schema", "items_schema", "fields", "definitions", "choices", "metadata", "serialization"}
 NAMES = {"ref", "model_name", "schema_ref"}
 # Keys whose values are data the JSON schema holds (a default, the choices,
@@ -162,44 +229,52 @@ DATA = {"default", "expected", "ge", "le", "gt", "lt", "max_length", "min_length
 def core_schema_features(schema) -> tuple[list[str], list, list]:
     """The pydantic features the core schema uses, as ``type``,
     ``type.key`` or ``type.key=value`` (a setting), with the functions it
-    calls and the models it builds."""
+    calls to validate and the models it builds. A serialization schema's
+    features are listed too, after ``serialization:``."""
     features, functions, models = set(), [], []
 
-    def walk(node):
+    def walk(node, within=""):
         if isinstance(node, list):
             for item in node:
-                walk(item)
+                walk(item, within)
             return
         if not isinstance(node, dict):
             return
         kind = node.get("type")
         if not isinstance(kind, str):
             for value in node.values():
-                walk(value)
+                walk(value, within)
             return
-        features.add(kind)
+        features.add(f"{within}{kind}")
         for key, value in node.items():
             if key == "type" or key in NAMES:
                 continue
             if key == "config":
-                features.update(f"{kind}.config.{name}={setting!r}" for name, setting in value.items() if name != "title")
-            elif key == "function":
-                features.add(f"{kind}.function.{value['type']}")
+                features.update(
+                    f"{within}{kind}.config.{name}={setting!r}" for name, setting in value.items() if name != "title"
+                )
+            elif key == "function" and isinstance(value, dict):
+                features.add(f"{within}{kind}.function.{value['type']}")
                 functions.append(value["function"])
+            elif key == "function":
+                # A serializer's function, which the mirror never copies
+                features.add(f"{within}{kind}.function")
             elif key == "cls":
                 if value not in models:
                     models.append(value)
             elif key == "computed_fields":
                 assert not value, f"computed fields: {value}"
             elif key in DATA or key in NESTED or not isinstance(value, (bool, int, str, type(None))):
-                if key not in ("metadata", "serialization"):
-                    features.add(f"{kind}.{key}")
+                if key != "metadata":
+                    features.add(f"{within}{kind}.{key}")
             else:
-                features.add(f"{kind}.{key}={value!r}")
+                features.add(f"{within}{kind}.{key}={value!r}")
             # Into every node it holds, but not into data, documentation or
             # a function
-            if key not in DATA and key not in ("metadata", "serialization", "function", "cls", "config"):
-                walk(value)
+            if key == "serialization":
+                walk(value, f"{within}serialization:")
+            elif key not in DATA and key not in ("metadata", "function", "cls", "config"):
+                walk(value, within)
 
     walk(schema)
     return sorted(features), functions, models
@@ -240,12 +315,17 @@ def validator_code(models: list, functions: list) -> tuple[dict[str, str], dict,
 
 
 class DashboardCode:
-    """The dashboard's own functions that start while this is open, in any
-    thread, found with ``sys.monitoring``: its endpoint, the code that runs
-    before and after the calculation, its lifespan. Each is seen once."""
+    """The dashboard's own functions that start or resume while this is
+    open, in any thread, found with ``sys.monitoring``: its endpoint, the
+    code that runs before and after the calculation, its lifespan. A
+    function is the dashboard's when its file is one of the commit's. Each
+    is seen once."""
 
-    def __init__(self, src: Path, skip):
-        self.src = src.resolve()
+    EVENTS = sys.monitoring.events.PY_START | sys.monitoring.events.PY_RESUME
+
+    def __init__(self, source: Path, tracked: set[Path], skip):
+        self.source = source.resolve()
+        self.tracked = tracked
         self.skip = {function.__code__ for function in skip}
         self.codes = {}
 
@@ -253,31 +333,33 @@ class DashboardCode:
         monitoring = sys.monitoring
         self.tool = next(tool for tool in range(6) if monitoring.get_tool(tool) is None)
         monitoring.use_tool_id(self.tool, "capture")
-        monitoring.register_callback(self.tool, monitoring.events.PY_START, self.started)
-        monitoring.set_events(self.tool, monitoring.events.PY_START)
+        for event in (monitoring.events.PY_START, monitoring.events.PY_RESUME):
+            monitoring.register_callback(self.tool, event, self.ran)
+        monitoring.set_events(self.tool, self.EVENTS)
         return self
 
-    def started(self, code, offset):
-        if code not in self.skip and Path(code.co_filename).resolve().is_relative_to(self.src):
+    def ran(self, code, offset):
+        if code not in self.skip and Path(code.co_filename).resolve() in self.tracked:
             self.codes[code] = None
         return sys.monitoring.DISABLE
 
     def __exit__(self, *exception):
         monitoring = sys.monitoring
         monitoring.set_events(self.tool, 0)
-        monitoring.register_callback(self.tool, monitoring.events.PY_START, None)
+        for event in (monitoring.events.PY_START, monitoring.events.PY_RESUME):
+            monitoring.register_callback(self.tool, event, None)
         monitoring.free_tool_id(self.tool)
 
     def record(self) -> dict[str, str]:
-        """Each function's code, as ``ast.unparse`` gives it without its
-        docstring, by module and qualified name. A generator expression is
-        part of the function it is in."""
+        """Each function's code, as ``ast.unparse`` gives it without
+        docstrings, by file and qualified name. A generator expression is
+        part of the function it is in; one at a module's top level is in
+        the module, which ``dashboard_files`` records."""
         record = {}
         for code in self.codes:
             if code.co_name.startswith("<") and code.co_name != "<lambda>":
                 continue
             path = Path(code.co_filename).resolve()
-            module = ".".join(path.relative_to(self.src).with_suffix("").parts)
             nodes = [
                 node
                 for node in ast.walk(ast.parse(path.read_text()))
@@ -286,18 +368,55 @@ class DashboardCode:
                 and (node.decorator_list[0].lineno if getattr(node, "decorator_list", None) else node.lineno)
                 == code.co_firstlineno
             ]
-            assert nodes, f"No code for {module}:{code.co_qualname}"
-            record.setdefault(f"{module}:{code.co_qualname}", set()).update(map(undocumented, nodes))
+            name = f"{path.relative_to(self.source).as_posix()}:{code.co_qualname}"
+            assert nodes, f"No code for {name}"
+            record.setdefault(name, set()).update(map(undocumented, nodes))
         return {name: "\n".join(sorted(sources)) for name, sources in sorted(record.items())}
 
 
 def undocumented(node) -> str:
+    """The code as ``ast.unparse`` gives it, without the docstrings of the
+    module, classes and functions in it."""
     node = copy.deepcopy(node)
-    body = getattr(node, "body", None)
-    if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-        if isinstance(body[0].value.value, str):
-            node.body = body[1:] or [ast.Pass()]
+    for inner in ast.walk(node):
+        body = getattr(inner, "body", None)
+        if (
+            isinstance(inner, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            inner.body = body[1:] or [ast.Pass()]
     return ast.unparse(node)
+
+
+class Opened:
+    """The files a Python audit hook sees opened from when this is made: a
+    hook stays for the life of the process, so this one records until it
+    ends."""
+
+    def __init__(self):
+        self.paths = set()
+        sys.addaudithook(self.hook)
+
+    def hook(self, event, args):
+        if event == "open" and isinstance(args[0], (str, bytes)):
+            self.paths.add(os.path.abspath(os.fsdecode(args[0])))
+
+
+def dashboard_files(tracked: set[Path], source: Path, opened: Opened) -> dict[str, str]:
+    """The sha256 of each of the commit's files this process loaded as a
+    module or opened: a Python file's code as ``undocumented`` gives it,
+    another file's bytes. Reading the diff of these between two commits is
+    reading every change to what the API runs or reads."""
+    paths = {Path(module.__file__).resolve() for module in list(sys.modules.values()) if getattr(module, "__file__", None)}
+    paths |= {Path(path).resolve() for path in set(opened.paths) if Path(path).is_file()}
+    record = {}
+    for path in sorted(paths & tracked):
+        data = undocumented(ast.parse(path.read_bytes())).encode() if path.suffix == ".py" else path.read_bytes()
+        record[path.relative_to(source.resolve()).as_posix()] = hashlib.sha256(data).hexdigest()
+    return record
 
 
 # The JSON schema's keywords that say what a value may be
@@ -667,8 +786,10 @@ class Api:
 
 
 def capture(dashboard: Path, commit: str, source: Path, out: Path):
-    check_source(dashboard, commit, source)
-    versions = check_environment(dashboard, commit)
+    check_bytecode()
+    tracked = check_source(dashboard, commit, source)
+    versions, checked = check_environment(dashboard, commit)
+    opened = Opened()
     import uk_budget_data
     from fastapi.routing import APIRoute
     from uk_budget_data import api, household_impact
@@ -699,7 +820,7 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
     base["include"] = list(choices["parts"])
     base["household"]["children"] = [{"age": 4}, {"age": 17, "in_education": True}]
 
-    with DashboardCode(source / "src", skip=validator_functions) as ran, Api(api, household_impact) as client:
+    with DashboardCode(source, tracked, skip=validator_functions) as ran, Api(api, household_impact) as client:
         assert client.verdict(base)["accepted"], "The base body must be one the API accepts"
         cases = []
         for case in cases_for(model, base, choices):
@@ -707,6 +828,9 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
             cases.append({**case, **client.verdict(apply(base, case))})
     assert {name: choices[name] for name in ("policy_years", "measure_ids")} == read(), "The choices changed"
     code = ran.record()
+    files = dashboard_files(tracked, source, opened)
+    check_loaded(tracked, checked)
+    check_bytecode()
 
     header = {
         "_note": (
@@ -725,6 +849,7 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
         "validators": json.dumps(validators, ensure_ascii=False),
         "features": json.dumps(features, ensure_ascii=False),
         "code": json.dumps(code, ensure_ascii=False),
+        "files": json.dumps(files, ensure_ascii=False),
         "base": json.dumps(base, ensure_ascii=False),
     }
     # One choice list and one case a line, so a recapture's diff reads
@@ -734,7 +859,7 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
     lines += [f'  "{name}": {value},' for name, value in header["choices"].items()]
     lines[-1] = lines[-1].rstrip(",")
     lines.append(" },")
-    lines += [f' "{key}": {header[key]},' for key in ("schema", "validators", "features", "code", "base")]
+    lines += [f' "{key}": {header[key]},' for key in ("schema", "validators", "features", "code", "files", "base")]
     lines.append(' "cases": [')
     # ASCII, so an unpaired surrogate is written as its escape
     lines += [f"  {json.dumps(case)}," for case in cases]
@@ -761,14 +886,16 @@ def main():
     if args.inner:
         return capture(dashboard, commit, args.source, out)
 
-    with tempfile.TemporaryDirectory() as temporary:
+    with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory() as cache:
         source = args.source.expanduser().resolve() if args.source else Path(temporary)
         if not args.source:
             export(dashboard, commit, source)
         python = [args.python] if args.python else ["uv", "run", "--frozen", "--exact", "--project", str(source), "python"]
+        # No cached bytecode read or written: every module runs from its source
+        python += ["-B", "-X", f"pycache_prefix={cache}"]
         inner = [__file__, "--inner", "--dashboard", str(dashboard), "--commit", commit, "--source", str(source)]
         inner += ["--output", str(out)]
-        sys.exit(subprocess.run([*python, "-B", *inner]).returncode)
+        sys.exit(subprocess.run([*python, *inner]).returncode)
 
 
 if __name__ == "__main__":

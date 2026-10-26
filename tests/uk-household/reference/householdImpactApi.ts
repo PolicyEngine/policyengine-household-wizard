@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
  * another feature (`MIRRORED_VALIDATORS`, `MIRRORED_FEATURES`), and checks
  * that every case in the fixture gets the API's verdict here. It also fails
  * when any other code of the dashboard's that runs while the API answers
- * changes (`REVIEWED_DASHBOARD_CODE`), until it is read again.
+ * changes (`REVIEWED_DASHBOARD_CODE`), or any file of the dashboard's the
+ * API loads or reads (`REVIEWED_DASHBOARD_FILES`), until it is read again.
  *
  * A refusal is a list of FastAPI's errors: where
  * (`household.children.0.age`, or `(body)` for the whole body) and its type
@@ -101,6 +102,12 @@ export interface ApiCapture {
    * without docstrings.
    */
   code: Record<string, string>;
+  /**
+   * The sha256 of each of the dashboard's files the API's process loaded
+   * as a module or opened, by path: a Python file's code as `ast.unparse`
+   * gives it without docstrings, another file's bytes.
+   */
+  files: Record<string, string>;
   base: Record<string, unknown>;
   cases: ApiCase[];
 }
@@ -429,22 +436,73 @@ def _known_measures(cls, policies: Optional[list[str]]):
  * anything it refuses before the calculation, then record its hash here.
  */
 export const REVIEWED_DASHBOARD_CODE: Record<string, string> = {
-  'uk_budget_data.api:HouseholdAnswersRequest.answers': '76314c442ec259f81e9fa53767fbe87d86c1bd35e25d1bebdfafcc1efcefeeea',
-  'uk_budget_data.api:HouseholdImpactRequest.<lambda>': '1b61e84fdea2e57b654e4748157ad60043a0461446f0824d365b9be40a1bbf3b',
-  'uk_budget_data.api:_cached_household_impact': 'e81ed6241b4eb9b3cfc0ee750079443ed775cf1a2eed555e78a3c85bfd8eb844',
-  'uk_budget_data.api:_household_impact': '495d9f8eb79a5e8b18866c79793d6784df562ad221f76d6bdc56b9a1d4db1425',
-  'uk_budget_data.api:calculate_household_impact': 'e1c4020ff06078fa91aa9a6ed8cbf7b5e9903b289aa9a4c8c407a1cad0c4aa8a',
-  'uk_budget_data.api:lifespan': '24ce3fa98dff567aa32ff88ba6e8fa9442c04d9c3e80073860c6bf5c0e0f7a20',
-  'uk_budget_data.api:memory_peak_bytes': '8819a1d179614b253eb08507862a0c1e82c0e93d62217ec853563a1e00c3e21b',
-  'uk_budget_data.api:server_timing': '086a8facc9e8fb83f09cd29e8fc7afd450094958cfbd67eb09dc874887b8c837',
-  'uk_budget_data.api:timed': '8c3a0335ccff0165b17faa8c746e26af7c8e0568f3ec09c4f4bc0505ae20156d',
-  'uk_budget_data.definitions:definitions_for': 'e0a8b2e91e821106e49afb12a4edce6efc4134c1663a4b60de62225b91e7e6d8',
-  'uk_budget_data.definitions:parse_requested': '1fbd90b2f78bab6736f9f1a879a58e10676ee55c735734d27f6038f02e58e380',
-  'uk_budget_data.household_impact:measure_ids': '3cf01b2af4f5b2769eff49e5f19cdc6cecf90aff5e3cb122596cf0699f7695b9',
-  'uk_budget_data.personal_impact:household_workers': '045c75b2b16f827f6353182df2d5acdebe735a7405fdad9a59761f20c52164f9',
-  'uk_budget_data.personal_impact:stop_workers': '39b0bd813b238dca928777964bd0eec50c88d5d96d612baea7805b268c262030',
-  'uk_budget_data.reforms:_get_autumn_budget_2026_reforms': '4382b625501e0fbd981573da05cb4b2a10c93ca74b347497733147f63cdbfc5e',
-  'uk_budget_data.reforms:get_autumn_budget_2026_reforms': 'b40bf0549bf9e5ad51c50eeb133f97cdd5cc8ae3f26ea533b2fde427a1755644',
+  'src/uk_budget_data/api.py:HouseholdAnswersRequest.answers': '76314c442ec259f81e9fa53767fbe87d86c1bd35e25d1bebdfafcc1efcefeeea',
+  'src/uk_budget_data/api.py:HouseholdImpactRequest.<lambda>': '1b61e84fdea2e57b654e4748157ad60043a0461446f0824d365b9be40a1bbf3b',
+  'src/uk_budget_data/api.py:_cached_household_impact': 'e81ed6241b4eb9b3cfc0ee750079443ed775cf1a2eed555e78a3c85bfd8eb844',
+  'src/uk_budget_data/api.py:_household_impact': '495d9f8eb79a5e8b18866c79793d6784df562ad221f76d6bdc56b9a1d4db1425',
+  'src/uk_budget_data/api.py:calculate_household_impact': 'e1c4020ff06078fa91aa9a6ed8cbf7b5e9903b289aa9a4c8c407a1cad0c4aa8a',
+  'src/uk_budget_data/api.py:lifespan': '24ce3fa98dff567aa32ff88ba6e8fa9442c04d9c3e80073860c6bf5c0e0f7a20',
+  'src/uk_budget_data/api.py:memory_peak_bytes': '8819a1d179614b253eb08507862a0c1e82c0e93d62217ec853563a1e00c3e21b',
+  'src/uk_budget_data/api.py:server_timing': '086a8facc9e8fb83f09cd29e8fc7afd450094958cfbd67eb09dc874887b8c837',
+  'src/uk_budget_data/api.py:timed': '8c3a0335ccff0165b17faa8c746e26af7c8e0568f3ec09c4f4bc0505ae20156d',
+  'src/uk_budget_data/definitions.py:definitions_for': 'e0a8b2e91e821106e49afb12a4edce6efc4134c1663a4b60de62225b91e7e6d8',
+  'src/uk_budget_data/definitions.py:parse_requested': '1fbd90b2f78bab6736f9f1a879a58e10676ee55c735734d27f6038f02e58e380',
+  'src/uk_budget_data/household_impact.py:measure_ids': '3cf01b2af4f5b2769eff49e5f19cdc6cecf90aff5e3cb122596cf0699f7695b9',
+  'src/uk_budget_data/personal_impact.py:household_workers': '045c75b2b16f827f6353182df2d5acdebe735a7405fdad9a59761f20c52164f9',
+  'src/uk_budget_data/personal_impact.py:stop_workers': '39b0bd813b238dca928777964bd0eec50c88d5d96d612baea7805b268c262030',
+  'src/uk_budget_data/reforms.py:_get_autumn_budget_2026_reforms': '4382b625501e0fbd981573da05cb4b2a10c93ca74b347497733147f63cdbfc5e',
+  'src/uk_budget_data/reforms.py:get_autumn_budget_2026_reforms': 'b40bf0549bf9e5ad51c50eeb133f97cdd5cc8ae3f26ea533b2fde427a1755644',
+};
+
+/**
+ * The sha256 of each of the dashboard's files the API's process loads or
+ * opens (`API.files`), as read at the commit below: 31 Python modules and
+ * budget_years.json. At import they build the app, its middleware and
+ * routes, the models, the reform list and the data tables, read
+ * budget_years.json and the environment for the worker and request limits,
+ * and call policyengine's recorder of the versions loaded; none of it
+ * changes pydantic, FastAPI or Starlette. A change to any of these files,
+ * a new one, or one no longer loaded makes apiMirror.test.ts fail: read
+ * `git diff <commit> <the new commit> -- <the files>` in the dashboard,
+ * follow in this mirror anything that changes what the API refuses before
+ * the calculation, then record the new commit and hashes here.
+ */
+export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, string> } = {
+  commit: 'bd346f300708b2fe4ad358e850bca546b9ffc3d4',
+  files: {
+    'src/uk_budget_data/__init__.py': '12a819e71709b113828c6354c5ed4b8c946a3be6c08d85ffa1012b8bc3673807',
+    'src/uk_budget_data/api.py': '7d5e9ad61f89087ff98746b4c8253da53db0e91ae41d5ec44bb568214af803d8',
+    'src/uk_budget_data/budget_measures/__init__.py': 'd74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1',
+    'src/uk_budget_data/budget_measures/connect_student_loan_repayments.py': 'cc91e585d308001c8e7a902d0a621cce142b39b67b979236389e0fb68a8ec4e2',
+    'src/uk_budget_data/budget_measures/employer_ni_relief_ages_21_to_24.py': '063816a303c646ea6f1aa9127f6e45d9e9345d01bd6bba8de5516a8c7b3a5db2',
+    'src/uk_budget_data/budget_measures/pump_vat_on_fuel_duty_deferral.py': '36a670dc921d4426951b1ba7af15f593780a3fad3106044a7b88453264c62a0a',
+    'src/uk_budget_data/budget_measures/road_fuel_vat_cut.py': 'f50f794036f796d0d543354b221fda147dc1e9f8a0ab57bbbb96c5179f976c4b',
+    'src/uk_budget_data/budget_measures/state_pension_income_tax_allowance.py': '11a23d0325e44707502c42d5e7a854b528d865a678ae42ea311393fd1495bdee',
+    'src/uk_budget_data/budget_measures/warm_home_discount_top_up.py': 'a9ce3d9d5428bc8190160864839fac8e668e57ad9ecc44ceec13a0362f027f47',
+    'src/uk_budget_data/budget_measures/zero_vat_on_domestic_electricity.py': '5a16b69c676aa0dde9a450713f8de11e39c36bc27564ec0aaa4e52644f245b25',
+    'src/uk_budget_data/budget_years.json': '8f03e13e0cbb80c286625a7773a717c285d4aae1420055825c3a0106a7c87823',
+    'src/uk_budget_data/budget_years.py': '787128ae63dd872ecfcaf02210141492e394f74973b70f63438a94e2d8c4c5fb',
+    'src/uk_budget_data/calculators.py': 'aa2d7378bbe58eb858a0c7980bb062b9b5a0ce7034885647abc48559c7ba8845',
+    'src/uk_budget_data/certified_data.py': '8fa8d7ffac7ea14402474026ae518bf0b11a2f5361b2af3cf06bc9bc9f07e7f3',
+    'src/uk_budget_data/data_limits.py': 'e5ba0998e2e0369f53a7a66f4a743d53d3a3fc3e12ae59858b1f75e73d20ed93',
+    'src/uk_budget_data/definitions.py': '8ce794cc07bcbed14851ef535da2bc3e7476b64e9966d9a919ddeaba14ac8ddc',
+    'src/uk_budget_data/household_impact.py': '3481e192ca45e324f2665583ab4bcefd7e135c5a5a4b5958cdfb93314a455c49',
+    'src/uk_budget_data/measure_templates.py': 'bb839020902fbf8bddee1fa173cefe368674b5a14f9b2d80e4b02341c7fdfd25',
+    'src/uk_budget_data/model_limits.py': '4c0a8ac198b5592d952f228ee6ca79aa31ac77c7819357be9d3b163c6a884013',
+    'src/uk_budget_data/models.py': '093c55bb28182a0da865681f92c2c5f52249c2346c12dc9361da6e6698d5bed0',
+    'src/uk_budget_data/personal_impact.py': '35818e981dda71520e23bac6f244d5997d7d7f7ca3e1006925e101e63e6dbc47',
+    'src/uk_budget_data/pipeline.py': '79c8cbebe7e64dd36248b9542b85b678df6c87df0696956e6c8a023a2c7376fd',
+    'src/uk_budget_data/private_outputs.py': 'f169e8673edc11904d3fc5ef468f0e3ba8edb48904b1ee5fdea59e61b257389a',
+    'src/uk_budget_data/publication/__init__.py': 'd74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1',
+    'src/uk_budget_data/publication/artifacts.py': 'cec2ef638efb74640243bec4574178da585af1609416c65c85f80c3c2a3939f9',
+    'src/uk_budget_data/publication/combine.py': 'e75fec0b44e467ef0532bf25e2d7880adf480d4ea556273aa0748d612bdb6b4e',
+    'src/uk_budget_data/publication/receipt.py': '4687a754857a7a209f4008ab7ad38410e1b3017c1c6bab22a6452874380e45a5',
+    'src/uk_budget_data/publication/tables.py': '7fcfb924582ea222fcc3668aabddaf7c8839c10dc20111feab0de26d81dc621a',
+    'src/uk_budget_data/publication/template_proof.py': '26e562365009cddce62330b7956fabe65360841f7b4ea2c36622ae4c4d2a8a3a',
+    'src/uk_budget_data/reforms.py': '47da57f216db99197cf697e7004d2ba62e19ae17302f4355cf69a4541922c07b',
+    'src/uk_budget_data/runtime_identity.py': 'dfd5e5438166dbf3baeb791e7ef0d5db8eb778508d432519def683c1de96a769',
+    'src/uk_budget_data/scored_years.py': 'b37938878a2e18e13b75d59f2fe0a8386cc6bc2c4b34b5b377c0866654c2e6fe',
+  },
 };
 
 /**

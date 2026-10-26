@@ -95,7 +95,8 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   in the environment its `uv.lock` pins. It also fails on a pydantic feature
   the models use that the mirror does not implement (`MIRRORED_FEATURES`),
   on a changed validator until the mirror copies it, and on a change to any
-  other dashboard code that runs while the API answers until it is read and
-  its hash recorded (`REVIEWED_DASHBOARD_CODE`).
+  other dashboard code that runs while the API answers, or any dashboard
+  file the API loads or reads, until it is read and its hash recorded
+  (`REVIEWED_DASHBOARD_CODE`, `REVIEWED_DASHBOARD_FILES`).
 - New country → mirror the structure of `src/us-household/` and
   `src/uk-household/` rather than mixing into either.
