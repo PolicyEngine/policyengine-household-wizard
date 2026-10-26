@@ -15,6 +15,8 @@ it:
 - ``code``: the code of the dashboard's other functions that ran while it
   answered the cases, and ``files``: the sha256 of each of the commit's
   files its process loaded or opened, which the mirror lists as read;
+- ``environment``: the interpreter, the platform and the version of each
+  package installed, which the mirror also lists as read;
 - ``base`` and ``cases``: a valid body, and changes to it (one field set to
   each kind of value pydantic might take or refuse, each household field
   again with a partner, children, unknown and prototype keys, the year
@@ -41,12 +43,13 @@ so the dashboard's checkout is not touched, and runs itself there with
 with ``-B`` and an empty ``pycache_prefix``, so no cached bytecode runs.
 ``--source DIR`` uses an export made before, and ``--python`` the
 interpreter of an environment already synced to its lock, so the capture
-can run without a network. Either way it checks that the files are the
-commit's, that every installed package is the version ``uv.lock`` pins and
-each of its files is as its ``RECORD`` says, that the packages deciding the
-verdicts are imported from those installs, and, at the end, that every
-module loaded was the interpreter's, a checked install, the commit's or
-this script.
+can run without a network. Either way, before it imports the dashboard, it
+checks that the files are the commit's, that every installed package is the
+PyPI release ``uv.lock`` pins and each file its ``RECORD`` hashes is as the
+``RECORD`` says, and that the packages deciding the verdicts are imported
+from those installs. At the end it checks that every module loaded from a
+file, and every file opened through Python, was the interpreter's, a
+checked install's, the commit's or this script.
 """
 
 import argparse
@@ -58,6 +61,7 @@ import importlib.metadata
 import inspect
 import json
 import os
+import platform
 import random
 import re
 import subprocess
@@ -74,8 +78,13 @@ OUT = HERE / "household-impact-api.json"
 ROUTE = "/api/household-impact"
 SEED = 20261025
 COMBINATIONS = 400
-# The packages whose versions decide the verdicts, recorded in the fixture
+# The packages that decide the verdicts, which must be imported from their
+# installs
 DECIDING = ("policyengine-uk", "pydantic", "pydantic-core", "fastapi", "starlette")
+# Where every package must come from, so its version names one release
+PYPI = {"registry": "https://pypi.org/simple"}
+# The commit's files that decide the environment, recorded by sha256
+ENVIRONMENT_INPUTS = (".python-version", "pyproject.toml", "uv.lock")
 
 
 def git(repo: Path, *args: str) -> str:
@@ -146,14 +155,22 @@ def canonical(name: str) -> str:
 VENV_SHIMS = {"_virtualenv.pth", "_virtualenv.py"}
 
 
-def check_environment(dashboard: Path, commit: str) -> tuple[dict[str, str], set[Path]]:
-    """Stop unless every package installed here is the version the
-    dashboard's ``uv.lock`` pins at the commit, each of its files is as its
-    ``RECORD`` says, no other ``.pth`` file can run code at startup, and the
-    deciding packages are imported from those installs; the deciding
-    versions, and the files checked."""
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict, set[Path]]:
+    """Stop unless every package installed here is the PyPI release the
+    dashboard's ``uv.lock`` pins at the commit, each file a ``RECORD``
+    hashes (the project's own install's too) is as the ``RECORD`` says,
+    every ``.pth`` file belongs to an installed package or is uv's shim, and
+    the deciding packages are imported from those installs. It runs once
+    the interpreter has started, so a ``.pth`` file it stops on has run.
+    Returns the environment (the interpreter, the platform, each package's
+    version, the shim's sha256 and that of the commit's files that decide
+    the rest) and the files checked."""
     lock = tomllib.loads(git(dashboard, "show", f"{commit}:uv.lock"))
-    locked = {canonical(package["name"]): package.get("version") for package in lock["package"]}
+    locked = {canonical(package["name"]): package for package in lock["package"]}
     project = canonical(tomllib.loads(git(dashboard, "show", f"{commit}:pyproject.toml"))["project"]["name"])
     # Every copy on the path, so one shadowing another is checked too. The
     # project's own (its install, and the egg-info a build leaves in src/)
@@ -162,54 +179,91 @@ def check_environment(dashboard: Path, commit: str) -> tuple[dict[str, str], set
     for dist in importlib.metadata.distributions():
         name = canonical(dist.metadata["Name"])
         owned.update(Path(dist.locate_file(file)).resolve() for file in dist.files or [])
-        if name == project:
-            continue
-        assert name not in installed, f"{name} is installed twice ({installed[name]}, {dist.version})"
-        installed[name] = dist.version
-        pinned = locked.get(name)
-        assert pinned == dist.version, f"{name} {dist.version} is installed, but uv.lock pins {pinned}"
+        if name != project:
+            assert name not in installed, f"{name} is installed twice ({installed[name]}, {dist.version})"
+            installed[name] = dist.version
+            pinned = locked.get(name, {})
+            assert pinned.get("version") == dist.version, (
+                f"{name} {dist.version} is installed, but uv.lock pins {pinned.get('version')}"
+            )
+            assert pinned.get("source") == PYPI, f"uv.lock takes {name} from {pinned.get('source')}, not PyPI"
         for file in dist.files or []:
-            if file.hash is not None:
-                located = Path(dist.locate_file(file)).resolve()
-                digest = hashlib.new(file.hash.mode, located.read_bytes()).digest()
-                assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == file.hash.value, (
-                    f"{located} is not the file {name} {dist.version} installed"
-                )
-                checked.add(located)
-    for directory in {sysconfig.get_paths()[key] for key in ("purelib", "platlib")}:
+            if file.hash is None:
+                # A RECORD lists itself without a hash; the egg-info lists
+                # the project's sources, which check_source checks
+                assert file.name == "RECORD" or name == project, f"{name}'s RECORD gives {file} no hash"
+                continue
+            located = Path(dist.locate_file(file)).resolve()
+            digest = hashlib.new(file.hash.mode, located.read_bytes()).digest()
+            assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == file.hash.value, (
+                f"{located} is not the file {name} {dist.version} installed"
+            )
+            checked.add(located)
+    shims = {}
+    for directory in sorted({sysconfig.get_paths()[key] for key in ("purelib", "platlib")}):
         for pth in Path(directory).glob("*.pth"):
             assert pth.name in VENV_SHIMS or pth.resolve() in owned, f"{pth} belongs to no installed package"
+        shims |= {name: sha256(shim) for name in sorted(VENV_SHIMS) if (shim := Path(directory) / name).is_file()}
     for name in DECIDING:
         module = importlib.import_module(name.replace("-", "_"))
         dist = importlib.metadata.distribution(name)
         files = {Path(dist.locate_file(file)).resolve() for file in dist.files}
         assert Path(module.__file__).resolve() in files, f"{module.__name__} is imported from {module.__file__}"
-    return {name: installed[name] for name in DECIDING}, checked
+    environment = {
+        "python": f"{sys.implementation.name} {platform.python_version()}",
+        "platform": sysconfig.get_platform(),
+        "packages": dict(sorted(installed.items())),
+        "shims": shims,
+        "inputs": {name: sha256(source / name) if (source / name).is_file() else None for name in ENVIRONMENT_INPUTS},
+    }
+    return environment, checked
 
 
-def check_loaded(tracked: set[Path], checked: set[Path]):
-    """Stop unless every module loaded is the interpreter's own, a file an
-    installed package's ``RECORD`` checked, one of the commit's files, or
-    this script."""
+def checked_file(tracked: set[Path], checked: set[Path]):
+    """Whether a file is the interpreter's own library, one a ``RECORD``
+    checked, one of the commit's, uv's shim (whose sha256 the environment
+    records) or this script."""
     paths = sysconfig.get_paths()
     interpreter = [Path(paths[key]).resolve() for key in ("stdlib", "platstdlib")]
     sites = {Path(paths[key]).resolve() for key in ("purelib", "platlib")}
-    for name, module in list(sys.modules.items()):
-        file = getattr(module, "__file__", None)
-        if not file or not Path(file).is_file():
-            continue
-        located = Path(file).resolve()
-        if located.parent in sites and located.name in VENV_SHIMS:
-            continue
-        assert (
+
+    def known(located: Path) -> bool:
+        return (
             located in checked
             or located in tracked
             or located == Path(__file__).resolve()
+            or (located.parent in sites and located.name in VENV_SHIMS)
             or (
                 not any(located.is_relative_to(site) for site in sites)
                 and any(located.is_relative_to(lib) for lib in interpreter)
             )
-        ), f"{name} is loaded from {located}, which nothing checked"
+        )
+
+    return known
+
+
+def check_loaded(tracked: set[Path], checked: set[Path]):
+    """Stop unless every module loaded from a file was loaded from a file
+    ``checked_file`` knows, by both its spec's origin and its ``__file__``.
+    A module with neither (built in, frozen, a namespace package, or one
+    made at run time) has no file to check; one whose origin or ``__file__``
+    is not a regular file, such as a path inside an archive, stops it."""
+    known = checked_file(tracked, checked)
+    for name, module in list(sys.modules.items()):
+        spec = getattr(module, "__spec__", None)
+        for file in {getattr(spec, "origin", None), getattr(module, "__file__", None)} - {None, "built-in", "frozen"}:
+            assert isinstance(file, str) and Path(file).is_file(), f"{name} is loaded from {file!r}, not a file"
+            assert known(Path(file).resolve()), f"{name} is loaded from {Path(file).resolve()}, which nothing checked"
+
+
+def check_opened(tracked: set[Path], checked: set[Path], opened: "Opened"):
+    """Stop unless every file opened through Python while the API ran, and
+    still there, is one ``checked_file`` knows. A library that opens a
+    file in C, as h5py does, is not seen."""
+    known = checked_file(tracked, checked)
+    for path in sorted(set(opened.paths)):
+        located = Path(path).resolve()
+        assert not located.is_file() or known(located), f"{located} was opened, but nothing checked it"
 
 
 # --- What the mirror reads from the models ---------------------------------------
@@ -392,9 +446,10 @@ def undocumented(node) -> str:
 
 
 class Opened:
-    """The files a Python audit hook sees opened from when this is made: a
-    hook stays for the life of the process, so this one records until it
-    ends."""
+    """The files a Python audit hook sees opened from when this is made:
+    through ``open`` or ``os.open``, as pandas and numpy read files too, but
+    not by a C library that opens a file itself, as h5py's HDF5 does. A hook
+    stays for the life of the process, so this one records until it ends."""
 
     def __init__(self):
         self.paths = set()
@@ -407,9 +462,10 @@ class Opened:
 
 def dashboard_files(tracked: set[Path], source: Path, opened: Opened) -> dict[str, str]:
     """The sha256 of each of the commit's files this process loaded as a
-    module or opened: a Python file's code as ``undocumented`` gives it,
-    another file's bytes. Reading the diff of these between two commits is
-    reading every change to what the API runs or reads."""
+    module or opened through Python: a Python file's code as
+    ``undocumented`` gives it, another file's bytes. Reading the diff of
+    these between two commits is reading every change to the commit's
+    files the API runs or reads; ``environment`` covers what is installed."""
     paths = {Path(module.__file__).resolve() for module in list(sys.modules.values()) if getattr(module, "__file__", None)}
     paths |= {Path(path).resolve() for path in set(opened.paths) if Path(path).is_file()}
     record = {}
@@ -788,7 +844,7 @@ class Api:
 def capture(dashboard: Path, commit: str, source: Path, out: Path):
     check_bytecode()
     tracked = check_source(dashboard, commit, source)
-    versions, checked = check_environment(dashboard, commit)
+    environment, checked = check_environment(dashboard, commit, source)
     opened = Opened()
     import uk_budget_data
     from fastapi.routing import APIRoute
@@ -830,6 +886,7 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
     code = ran.record()
     files = dashboard_files(tracked, source, opened)
     check_loaded(tracked, checked)
+    check_opened(tracked, checked, opened)
     check_bytecode()
 
     header = {
@@ -841,9 +898,10 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
         "source": {
             "dashboard": "PolicyEngine/uk-autumn-budget-dashboard-2026",
             "commit": commit,
-            **{package.replace("-", "_"): version for package, version in versions.items()},
             "seed": SEED,
         },
+        # One package a line, so a recapture's diff reads
+        "environment": json.dumps(environment, indent=1, ensure_ascii=False).replace("\n", "\n "),
         "choices": {name: json.dumps(value, ensure_ascii=False) for name, value in choices.items()},
         "schema": json.dumps(schema, ensure_ascii=False),
         "validators": json.dumps(validators, ensure_ascii=False),
@@ -859,7 +917,8 @@ def capture(dashboard: Path, commit: str, source: Path, out: Path):
     lines += [f'  "{name}": {value},' for name, value in header["choices"].items()]
     lines[-1] = lines[-1].rstrip(",")
     lines.append(" },")
-    lines += [f' "{key}": {header[key]},' for key in ("schema", "validators", "features", "code", "files", "base")]
+    keys = ("environment", "schema", "validators", "features", "code", "files", "base")
+    lines += [f' "{key}": {header[key]},' for key in keys]
     lines.append(' "cases": [')
     # ASCII, so an unpaired surrogate is written as its escape
     lines += [f"  {json.dumps(case)}," for case in cases]

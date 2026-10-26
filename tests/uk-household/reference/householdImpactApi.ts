@@ -19,8 +19,9 @@ import { fileURLToPath } from 'node:url';
  * another feature (`MIRRORED_VALIDATORS`, `MIRRORED_FEATURES`), and checks
  * that every case in the fixture gets the API's verdict here. It also fails
  * when any other code of the dashboard's that runs while the API answers
- * changes (`REVIEWED_DASHBOARD_CODE`), or any file of the dashboard's the
- * API loads or reads (`REVIEWED_DASHBOARD_FILES`), until it is read again.
+ * changes (`REVIEWED_DASHBOARD_CODE`), any file of the dashboard's the API
+ * loads or reads (`REVIEWED_DASHBOARD_FILES`), or the environment it runs in
+ * (`REVIEWED_DASHBOARD_ENVIRONMENT`), until it is read again.
  *
  * A refusal is a list of FastAPI's errors: where
  * (`household.children.0.age`, or `(body)` for the whole body) and its type
@@ -70,12 +71,19 @@ export interface ApiCapture {
   source: {
     dashboard: string;
     commit: string;
-    policyengine_uk: string;
-    pydantic: string;
-    pydantic_core: string;
-    fastapi: string;
-    starlette: string;
     seed: number;
+  };
+  /**
+   * What the API ran in: the interpreter, the platform, the version of each
+   * package installed, the sha256 of uv's shim, and that of the commit's
+   * files that decide the rest.
+   */
+  environment: {
+    python: string;
+    platform: string;
+    packages: Record<string, string>;
+    shims: Record<string, string>;
+    inputs: Record<string, string | null>;
   };
   choices: {
     policy_years: number[];
@@ -104,8 +112,8 @@ export interface ApiCapture {
   code: Record<string, string>;
   /**
    * The sha256 of each of the dashboard's files the API's process loaded
-   * as a module or opened, by path: a Python file's code as `ast.unparse`
-   * gives it without docstrings, another file's bytes.
+   * as a module or opened through Python, by path: a Python file's code as
+   * `ast.unparse` gives it without docstrings, another file's bytes.
    */
   files: Record<string, string>;
   base: Record<string, unknown>;
@@ -456,16 +464,24 @@ export const REVIEWED_DASHBOARD_CODE: Record<string, string> = {
 
 /**
  * The sha256 of each of the dashboard's files the API's process loads or
- * opens (`API.files`), as read at the commit below: 31 Python modules and
- * budget_years.json. At import they build the app, its middleware and
- * routes, the models, the reform list and the data tables, read
- * budget_years.json and the environment for the worker and request limits,
- * and call policyengine's recorder of the versions loaded; none of it
- * changes pydantic, FastAPI or Starlette. A change to any of these files,
- * a new one, or one no longer loaded makes apiMirror.test.ts fail: read
- * `git diff <commit> <the new commit> -- <the files>` in the dashboard,
- * follow in this mirror anything that changes what the API refuses before
- * the calculation, then record the new commit and hashes here.
+ * opens through Python (`API.files`), as read at the commit below: 31
+ * Python modules and budget_years.json. At import they:
+ * - build the app, its middleware and routes, the models, the reform list
+ *   and the data tables, and hash the data and model limit registries;
+ * - read budget_years.json, and the environment for the worker, request and
+ *   calculation time limits;
+ * - check what the installed policyengine-uk has (whether
+ *   `read_parameter_changes` takes calendar years, and the years its UC
+ *   rebalancing runs);
+ * - make the pipeline's `rich` console, and call policyengine's recorder of
+ *   the versions loaded.
+ *
+ * None of it changes pydantic, pydantic-core, FastAPI or Starlette. A change
+ * to any of these files, a new one, or one no longer loaded makes
+ * apiMirror.test.ts fail: read `git diff <commit> <the new commit> -- <the
+ * files>` in the dashboard (the failure gives the command), follow in this
+ * mirror anything that changes what the API refuses before the calculation,
+ * then record the new commit and hashes here.
  */
 export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, string> } = {
   commit: 'bd346f300708b2fe4ad358e850bca546b9ffc3d4',
@@ -502,6 +518,134 @@ export const REVIEWED_DASHBOARD_FILES: { commit: string; files: Record<string, s
     'src/uk_budget_data/reforms.py': '47da57f216db99197cf697e7004d2ba62e19ae17302f4355cf69a4541922c07b',
     'src/uk_budget_data/runtime_identity.py': 'dfd5e5438166dbf3baeb791e7ef0d5db8eb778508d432519def683c1de96a769',
     'src/uk_budget_data/scored_years.py': 'b37938878a2e18e13b75d59f2fe0a8386cc6bc2c4b34b5b377c0866654c2e6fe',
+  },
+};
+
+/**
+ * The environment the capture ran the dashboard's API in
+ * (`API.environment`), as read at the commit below: the interpreter, the
+ * platform, the version of each package installed from the dashboard's
+ * uv.lock (each a PyPI release, every file of it checked against its
+ * RECORD), the sha256 of the shim uv adds, and that of the commit's
+ * .python-version, pyproject.toml and uv.lock, which decide the rest.
+ * Starlette parses the body with the interpreter's `json.loads`, then
+ * pydantic validates it with pydantic-core, typing-inspection (which reads
+ * the `Literal` choices) and annotated-types (the bounds); this mirror
+ * follows them at these versions. When a recapture runs in anything else,
+ * apiMirror.test.ts fails: read what changed in each package whose version
+ * differs (and in the interpreter), and `git diff <commit> <the new commit>
+ * -- .python-version pyproject.toml uv.lock` in the dashboard, follow in
+ * this mirror anything that changes what the API refuses before the
+ * calculation, then record the new commit and environment here.
+ */
+export const REVIEWED_DASHBOARD_ENVIRONMENT: { commit: string } & ApiCapture['environment'] = {
+  commit: 'bd346f300708b2fe4ad358e850bca546b9ffc3d4',
+  python: 'cpython 3.13.9',
+  platform: 'macosx-11.0-arm64',
+  packages: {
+    'annotated-doc': '0.0.4',
+    'annotated-types': '0.7.0',
+    anyio: '4.11.0',
+    asttokens: '3.0.1',
+    attrs: '26.1.0',
+    blosc2: '3.11.1',
+    certifi: '2026.10.19',
+    'charset-normalizer': '3.4.4',
+    click: '8.3.1',
+    decorator: '5.2.1',
+    defusedxml: '0.7.1',
+    dpath: '2.2.0',
+    'et-xmlfile': '2.0.0',
+    executing: '2.2.1',
+    fastapi: '0.122.0',
+    filelock: '3.20.0',
+    fsspec: '2025.10.0',
+    h11: '0.16.0',
+    h5py: '3.15.1',
+    'hf-xet': '1.7.0',
+    httpcore: '1.0.9',
+    httptools: '0.7.1',
+    httpx: '0.28.1',
+    'huggingface-hub': '1.1.5',
+    idna: '3.11',
+    iniconfig: '2.3.0',
+    ipython: '8.37.0',
+    jedi: '0.19.2',
+    jinja2: '3.1.6',
+    jsonpickle: '4.1.1',
+    jsonschema: '4.26.0',
+    'jsonschema-specifications': '2025.9.1',
+    'markdown-it-py': '4.0.0',
+    markupsafe: '3.0.3',
+    'matplotlib-inline': '0.2.1',
+    mdurl: '0.1.2',
+    'microdf-python': '1.3.10',
+    msgpack: '1.1.2',
+    ndindex: '1.10.1',
+    networkx: '3.6',
+    numexpr: '2.14.1',
+    numpy: '2.1.3',
+    odfpy: '1.4.1',
+    openpyxl: '3.1.5',
+    packaging: '25.0',
+    pandas: '2.3.3',
+    parso: '0.8.5',
+    pexpect: '4.9.0',
+    platformdirs: '4.5.0',
+    plotly: '5.24.1',
+    pluggy: '1.6.0',
+    policyengine: '6.10.2',
+    'policyengine-core': '3.33.3',
+    'policyengine-uk': '2.132.6',
+    'prompt-toolkit': '3.0.52',
+    psutil: '6.1.1',
+    ptyprocess: '0.7.0',
+    'pure-eval': '0.2.3',
+    'py-cpuinfo': '9.0.0',
+    pydantic: '2.12.5',
+    'pydantic-core': '2.41.5',
+    pygments: '2.19.2',
+    pytest: '8.4.2',
+    'python-dateutil': '2.9.0.post0',
+    'python-dotenv': '1.2.1',
+    pytz: '2025.2',
+    pyvis: '0.3.2',
+    pyyaml: '6.0.3',
+    referencing: '0.37.0',
+    requests: '2.32.5',
+    rich: '14.2.0',
+    'rpds-py': '2026.6.3',
+    shellingham: '1.5.4',
+    six: '1.17.0',
+    sniffio: '1.3.1',
+    sortedcontainers: '2.4.0',
+    'stack-data': '0.6.3',
+    'standard-imghdr': '3.13.0',
+    starlette: '0.50.0',
+    tables: '3.10.2',
+    tenacity: '9.1.2',
+    tqdm: '4.67.1',
+    traitlets: '5.14.3',
+    'typer-slim': '0.20.0',
+    'typing-extensions': '4.15.0',
+    'typing-inspection': '0.4.2',
+    tzdata: '2025.2',
+    urllib3: '2.5.0',
+    uvicorn: '0.38.0',
+    uvloop: '0.22.1',
+    watchfiles: '1.1.1',
+    wcwidth: '0.2.14',
+    websockets: '15.0.1',
+    wheel: '0.45.1',
+  },
+  shims: {
+    '_virtualenv.pth': '69ac3d8f27e679c81b94ab30b3b56e9cd138219b1ba94a1fa3606d5a76a1433d',
+    '_virtualenv.py': '6cf30c56faf2a55228914dbbd17f8088ed371ebb08f5e7fa6fd931f913fcaf1d',
+  },
+  inputs: {
+    '.python-version': '02e735b3dfe1c32833eb550b7ff8ffa17f5f2bc3fa1e7bae61a8f5a3883ce398',
+    'pyproject.toml': '82606c94c61336e874b8388d7c897587892ec9ba7e2dcea28ee44292ba4b91eb',
+    'uv.lock': '8811b89ac843dbe7335abb1ea3cb3e737c61f5b1fa31151b4c496093e8749bdd',
   },
 };
 

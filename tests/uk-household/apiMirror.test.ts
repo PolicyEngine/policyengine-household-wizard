@@ -6,6 +6,7 @@ import {
   MIRRORED_FEATURES,
   MIRRORED_VALIDATORS,
   REVIEWED_DASHBOARD_CODE,
+  REVIEWED_DASHBOARD_ENVIRONMENT,
   REVIEWED_DASHBOARD_FILES,
   apiRefusals,
   apiVerdict,
@@ -39,6 +40,10 @@ function bodyFor(apiCase: ApiCase): unknown {
   for (const path of apiCase.remove ?? []) delete parentOf(path)[path.at(-1)!];
   return body;
 }
+
+// The keys whose values differ between two records
+const differing = (reviewed: Record<string, unknown>, captured: Record<string, unknown>) =>
+  [...new Set([...Object.keys(reviewed), ...Object.keys(captured)])].filter((key) => reviewed[key] !== captured[key]).sort();
 
 describe('the household impact API mirror', () => {
   it('is captured from the dashboard’s models, with cases on both sides', () => {
@@ -84,7 +89,23 @@ describe('the household impact API mirror', () => {
   });
 
   it('has read every file of the dashboard’s the API loads or reads', () => {
-    expect(API.files).toEqual(REVIEWED_DASHBOARD_FILES.files);
+    const { commit, files } = REVIEWED_DASHBOARD_FILES;
+    expect(commit).toMatch(/^[0-9a-f]{40}$/);
+    const changed = differing(files, API.files);
+    expect(API.files, `Read git diff ${commit} ${API.source.commit} -- ${changed.join(' ')}`).toEqual(files);
+  });
+
+  it('has read the environment the API runs in', () => {
+    const { commit, ...reviewed } = REVIEWED_DASHBOARD_ENVIRONMENT;
+    expect(commit).toMatch(/^[0-9a-f]{40}$/);
+    const changed = differing(reviewed.packages, API.environment.packages);
+    for (const key of ['python', 'platform'] as const) {
+      if (API.environment[key] !== reviewed[key]) changed.push(API.environment[key]);
+    }
+    changed.push(...differing(reviewed.shims, API.environment.shims));
+    const diff = `git diff ${commit} ${API.source.commit} -- ${Object.keys(reviewed.inputs).join(' ')}`;
+    const read = changed.length ? `what changed in ${changed.join(', ')}, and ${diff}` : diff;
+    expect(API.environment, `Read ${read}`).toEqual(reviewed);
   });
 
   it('implements every pydantic feature the models use', () => {

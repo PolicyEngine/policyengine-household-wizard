@@ -171,17 +171,23 @@ The capture runs the dashboard's own API. It exports a commit with
 `git archive` and installs exactly what that commit's `uv.lock` pins
 (`uv run --frozen --exact`). Python runs with `-B` and an empty
 `pycache_prefix`, so every module runs from its source rather than from
-cached bytecode. Before anything runs, the capture checks four things:
+cached bytecode. Before it imports the dashboard, the capture checks four
+things:
 - the files are the commit's;
-- every package installed is the locked version, each copy if one shadows
-  another;
-- each installed file is as its package's `RECORD` says, and no other
-  `.pth` file can run at startup;
+- every package installed is the PyPI release the lock pins, each copy if
+  one shadows another;
+- each file a package's `RECORD` hashes is as the `RECORD` says, the
+  project's own install included, and every `.pth` file belongs to an
+  installed package or is uv's shim. These checks run once the interpreter
+  has started, so a `.pth` file they stop on has already run;
 - pydantic, pydantic-core, FastAPI, Starlette and policyengine-uk are
   imported from those installs.
 
-Once it is done, it checks that every module loaded was the interpreter's
-own, a checked install, one of the commit's files or the capture itself.
+Once it is done, it checks that every module loaded from a file, and every
+file opened through Python, was the interpreter's own, a checked install's,
+one of the commit's or the capture itself. A module whose spec or
+`__file__` names anything but a regular file, such as a path in an archive,
+stops it.
 
 It then imports `uk_budget_data.api` and replaces only the calculation
 (`household_impact.calculate_household_impact`) with one that counts its
@@ -236,24 +242,38 @@ runs and reads, so a change no case shows still fails the test:
   (`REVIEWED_DASHBOARD_CODE`), and the test fails when one changes, is
   added or no longer runs.
 - `files`: the sha256 of each of the commit's files the API's process
-  loaded as a module or opened: 31 Python modules and `budget_years.json`.
-  The mirror lists them with the commit they were read at
-  (`REVIEWED_DASHBOARD_FILES`). The test fails when one changes, is added
-  or is no longer loaded. That covers what runs at import: a patch to a
-  library, a function wrapped at import, a module the API loads from
-  outside `src/`.
+  loaded as a module or opened through Python: 31 Python modules and
+  `budget_years.json`. The mirror lists them with the commit they were read
+  at (`REVIEWED_DASHBOARD_FILES`). The test fails when one changes, is
+  added or is no longer loaded. That covers what runs at import: a patch to
+  a library, a function wrapped at import, a module the API loads from
+  outside `src/`. An audit hook sees the files opened. It sees `open` and
+  `os.open`, which pandas and numpy use, but not a C library that opens a
+  file itself, as h5py's HDF5 does. At bd346f30 the API calls no
+  `h5py.File`; if it ever reads data that way, add those files by hand.
+- `environment`: the interpreter, the platform, the version of each
+  package installed besides the dashboard's own (94 of them), the sha256 of
+  uv's shim (`_virtualenv.py` and its `.pth`), and that of the commit's
+  `.python-version`, `pyproject.toml` and `uv.lock`, which decide the rest. The mirror lists them with the commit
+  they were read at (`REVIEWED_DASHBOARD_ENVIRONMENT`), and the test fails
+  when any changes. Starlette parses the body with the interpreter's
+  `json.loads`, and pydantic validates it with pydantic-core,
+  typing-inspection and annotated-types, so a new version of any of them
+  can change what the API accepts on bodies no case sends.
 
-Both of the last two cover code that refuses a body no case sends, such as
-a check added to `answers()`. When one fails, read the new code (for
-`files`, `git diff` from the recorded commit in the dashboard), follow in
-the mirror anything it refuses before the calculation, then record the new
-hashes. Code is recorded as `ast.unparse` gives it without docstrings, so
-formatting and docstrings do not count. The route's decorator and
-parameters do, documentation keywords such as `summary` included.
+`code` and `files` cover code that refuses a body no case sends, such as a
+check added to `answers()`, and `environment` a library change no case
+shows. When one fails, read what changed (the failure names the `git diff`
+to run in the dashboard), follow in the mirror anything that changes what
+the API refuses before the calculation, then record the new hashes or
+versions and the commit. Code is recorded as `ast.unparse` gives it without
+docstrings, so formatting and docstrings do not count. The route's
+decorator and parameters do, documentation keywords such as `summary`
+included.
 
 `--source` and `--python` run the capture on an export and environment made
 before, without a network. The same checks apply; the interpreter itself is
-trusted.
+trusted, and its version is recorded.
 
 When the dashboard's API changes, rerun the capture (its docstring has the
 command), then update `UK_HOUSEHOLD_LIMITS`, `UK_POLICY_YEARS` and the
