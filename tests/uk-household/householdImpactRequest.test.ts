@@ -263,6 +263,8 @@ describe('toHouseholdImpactRequest', () => {
       ),
     });
     const years = fc.oneof({ arbitrary: fc.constantFrom(...API.choices.policy_years), weight: 3 }, { arbitrary: yearArb, weight: 1 });
+    // At least one measure: the API refuses an empty list, which validate()
+    // cannot see (the next test)
     const measures = fc.subarray([...MEASURE_IDS], { minLength: 1 });
     let accepted = 0;
     fc.assert(
@@ -277,6 +279,13 @@ describe('toHouseholdImpactRequest', () => {
     );
     // The property ran on accepted drafts, not only refused ones
     expect(accepted).toBeGreaterThan(50);
+  });
+
+  it('leaves the measures to the caller: the API refuses an empty list', () => {
+    const draft = createTypicalDraft();
+    expect(validate(draft, { year: 2027 }).ok).toBe(true);
+    expect(apiRefusals(toHouseholdImpactRequest(draft, { year: 2027, policies: [] }))).toEqual(['policies: too_short']);
+    expect(apiRefusals(toHouseholdImpactRequest(draft, { year: 2027, policies: ['a'] }))).toEqual(['policies: value_error']);
   });
 
   it('refuses nothing the API accepts in the typical and blank drafts once answered', () => {

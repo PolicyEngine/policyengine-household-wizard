@@ -4,10 +4,11 @@
  *
  * A throwaway app imports every export path and uses a named export from
  * each, then tsc checks it with library checking on (`skipLibCheck: false`),
- * once for each way consumers resolve modules: ESM with
- * `moduleResolution: "NodeNext"`, as Node runs it, and `"Bundler"`, as Vite
- * and Next.js do. The package is linked into the app's node_modules, so its
- * own `exports` map and `dist` declarations are what the app sees.
+ * once for each way consumers resolve modules: `moduleResolution:
+ * "NodeNext"` as Node runs it, for an ESM app and for a CommonJS one (which
+ * TypeScript 5.8 and later let `require` an ESM package), and `"Bundler"`, as
+ * Vite and Next.js do. The package is linked into the app's node_modules, so
+ * its own `exports` map and `dist` declarations are what the app sees.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -42,8 +43,9 @@ export const used = [createBlankDraft, WizardProgress, createBlankUSDraft, toV1H
 `;
 
 const RESOLUTIONS = [
-  { name: 'NodeNext (ESM)', module: 'NodeNext', moduleResolution: 'NodeNext' },
-  { name: 'Bundler', module: 'ESNext', moduleResolution: 'Bundler' },
+  { name: 'NodeNext (ESM)', type: 'module', module: 'NodeNext', moduleResolution: 'NodeNext' },
+  { name: 'NodeNext (CommonJS)', type: 'commonjs', module: 'NodeNext', moduleResolution: 'NodeNext' },
+  { name: 'Bundler', type: 'module', module: 'ESNext', moduleResolution: 'Bundler' },
 ];
 
 const app = mkdtempSync(join(tmpdir(), 'household-wizard-consumer-'));
@@ -51,9 +53,9 @@ let failed = false;
 try {
   mkdirSync(join(app, 'node_modules'));
   symlinkSync(ROOT, join(app, 'node_modules', 'policyengine-household-wizard'), 'dir');
-  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'consumer', private: true, type: 'module' }));
   writeFileSync(join(app, 'index.ts'), CONSUMER);
-  for (const { name, module, moduleResolution } of RESOLUTIONS) {
+  for (const { name, type, module, moduleResolution } of RESOLUTIONS) {
+    writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'consumer', private: true, type }));
     const compilerOptions = {
       module,
       moduleResolution,

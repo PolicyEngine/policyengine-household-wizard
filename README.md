@@ -144,7 +144,7 @@ bun install
 bun run test
 bun run typecheck
 bun run build
-bun run check:consumer-types   # a NodeNext and a Bundler app type-check against dist
+bun run check:consumer-types   # NodeNext (ESM and CommonJS) and Bundler apps type-check against dist
 bun run test:live   # adapter output against api.policyengine.org (network)
 ```
 

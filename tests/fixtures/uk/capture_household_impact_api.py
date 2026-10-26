@@ -78,13 +78,18 @@ def enum_names(uk: Path, version: str, module: str, name: str) -> tuple[str, ...
     tree = ast.parse(git_show(uk, version, module.replace(".", "/") + ".py"))
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == name:
-            return tuple(
-                target.id
+            members = [
+                (target.id, ast.literal_eval(statement.value))
                 for statement in node.body
                 if isinstance(statement, ast.Assign)
                 for target in statement.targets
                 if isinstance(target, ast.Name)
-            )
+            ]
+            # Iterating an Enum skips aliases (members sharing a value), so
+            # every name is a member only while the values are distinct
+            values = [value for _, value in members]
+            assert len(set(values)) == len(values), f"{name} has aliases"
+            return tuple(member for member, _ in members)
     raise SystemExit(f"No enum {name} in policyengine-uk's {module}")
 
 
@@ -115,6 +120,67 @@ def household_impact_choices(dashboard: Path, commit: str, uk: Path, version: st
         enum = generator.generators[0].iter.id
         choices[name] = enum_names(uk, version, imported[enum], enum)
     return SimpleNamespace(**choices)
+
+
+def function_source(tree: ast.Module, name: str) -> str:
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.unparse(node)
+    raise SystemExit(f"No function {name}")
+
+
+# The code the choices are read through, as `ast.unparse` gives it: the
+# capture stops if any of it changes, since the reading would then be wrong
+WIRING = {
+    "household_impact.measure_ids returns": (
+        "return [reform.id for reform in get_autumn_budget_2026_reforms() "
+        "if reform.id != AUTUMN_BUDGET_2026_COMBINED_ID]"
+    ),
+    "reforms.get_autumn_budget_2026_reforms returns": "return _get_autumn_budget_2026_reforms()",
+    "reforms._get_autumn_budget_2026_reforms builds": "members = [factory() for factory in _MEASURE_FACTORIES]",
+    "budget_years._CONFIG": "_CONFIG = json.loads(files('uk_budget_data').joinpath('budget_years.json').read_text())",
+    "budget_years.POLICY_YEARS": "POLICY_YEARS = _CONFIG['policy_years']",
+    "api.py imports POLICY_YEARS": "uk_budget_data.budget_years.POLICY_YEARS",
+    "api.py imports household_impact": "uk_budget_data.household_impact",
+}
+
+
+def check_wiring(dashboard: Path, commit: str):
+    impact = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/household_impact.py"))
+    reforms = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/reforms.py"))
+    years = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/budget_years.py"))
+    api = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/api.py"))
+    found = {
+        "household_impact.measure_ids returns": function_source(impact, "measure_ids").splitlines()[-1].strip(),
+        "reforms.get_autumn_budget_2026_reforms returns": function_source(
+            reforms, "get_autumn_budget_2026_reforms"
+        ).splitlines()[-1].strip(),
+        "reforms._get_autumn_budget_2026_reforms builds": next(
+            line.strip()
+            for line in function_source(reforms, "_get_autumn_budget_2026_reforms").splitlines()
+            if "_MEASURE_FACTORIES" in line
+        ),
+        "budget_years._CONFIG": ast.unparse(module_statement(years, "_CONFIG")),
+        "budget_years.POLICY_YEARS": ast.unparse(module_statement(years, "POLICY_YEARS")),
+    }
+    # What api.py's own names POLICY_YEARS and household_impact are bound to
+    imported = {
+        alias.asname or alias.name: f"{node.module}.{alias.name}"
+        for node in api.body
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    found["api.py imports POLICY_YEARS"] = imported.get("POLICY_YEARS")
+    found["api.py imports household_impact"] = imported.get("household_impact")
+    for name, expected in WIRING.items():
+        assert found[name] == expected, f"{name} changed: {found[name]!r}"
+
+
+def module_statement(tree: ast.Module, name: str) -> ast.stmt:
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return node
+    raise SystemExit(f"No assignment to {name}")
 
 
 def measure_ids(dashboard: Path, commit: str) -> list[str]:
@@ -162,7 +228,8 @@ def request_models(dashboard: Path, commit: str, household_impact: SimpleNamespa
     for name in MODELS:
         exec(compile(ast.Module(body=[classes[name]], type_ignores=[]), f"api.py:{name}", "exec"), namespace)
     # The mirror copies these validators' rules by hand; another validator
-    # must be copied too before the capture is trusted
+    # must be copied too before the capture is trusted, and their code is
+    # kept in the fixture, so apiMirror.test.ts sees a change to one
     for name in MODELS:
         decorators = namespace[name].__pydantic_decorators__
         found = {
@@ -172,7 +239,12 @@ def request_models(dashboard: Path, commit: str, household_impact: SimpleNamespa
             if getattr(decorators, kind)
         }
         assert found == VALIDATORS.get(name, {}), f"{name} has validators {found}"
-    return namespace["HouseholdImpactRequest"]
+    validators = {
+        node.name: ast.unparse(node)
+        for node in classes["HouseholdImpactRequest"].body
+        if isinstance(node, ast.FunctionDef) and node.decorator_list
+    }
+    return namespace["HouseholdImpactRequest"], validators
 
 
 VALIDATORS = {
@@ -250,6 +322,8 @@ def json_number(value):
 PROTOTYPE_KEYS = ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]
 ANY = [
     None, True, False, 0, 1, 2, -1, 0.5, 30.5, -0.5, 1e308, 10**15,
+    # Integers JavaScript writes in full (below 1e21): past an int64 too
+    2**53, 10**19, -(10**19), 10**20, 999999999999999868928, 1e21, -1e21,
     "", "x", "30", " 30", "30 ", "+30", "-30", "30.0", "30.5", "3_0", "1e3", "0x1e", "030",
     "nan", "NaN", "inf", "-inf", "Infinity", "1e400", "true", "false", "yes", "None", "null",
     # How each language reads number text: underscores, signs, exponents,
@@ -424,7 +498,8 @@ def main():
     # Named only in the return annotation of HouseholdAnswersRequest.answers(),
     # which validation does not call
     household_impact.HouseholdAnswers = household_impact.Child = object
-    model = request_models(dashboard, commit, household_impact, policy_years)
+    check_wiring(dashboard, commit)
+    model, validators = request_models(dashboard, commit, household_impact, policy_years)
 
     choices = {
         "policy_years": policy_years,
@@ -464,6 +539,7 @@ def main():
         },
         "choices": {name: json.dumps(value, ensure_ascii=False) for name, value in choices.items()},
         "schema": json.dumps(validation_schema(model.model_json_schema()), ensure_ascii=False),
+        "validators": json.dumps(validators, ensure_ascii=False),
         "base": json.dumps(base, ensure_ascii=False),
     }
     # One choice list and one case a line, so a recapture's diff reads
@@ -472,7 +548,8 @@ def main():
     lines.append(' "choices": {')
     lines += [f'  "{name}": {value},' for name, value in header["choices"].items()]
     lines[-1] = lines[-1].rstrip(",")
-    lines += [" },", f' "schema": {header["schema"]},', f' "base": {header["base"]},', ' "cases": [']
+    lines += [" },", f' "schema": {header["schema"]},', f' "validators": {header["validators"]},']
+    lines += [f' "base": {header["base"]},', ' "cases": [']
     lines += [f"  {json.dumps(case, ensure_ascii=False)}," for case in cases]
     lines[-1] = lines[-1].rstrip(",")
     lines += [" ]", "}"]

@@ -52,7 +52,9 @@ const pounds = (amount: number) => `£${amount.toLocaleString('en-GB')}`;
  * answer the calculation needs and lacks, or one the household impact API
  * would refuse, so a draft that passes builds a request within the API's
  * bounds (`UK_HOUSEHOLD_LIMITS`) and years (`UK_POLICY_YEARS`), unless
- * `options.years` names others. An answer the calculation does not read
+ * `options.years` names others. The request also needs at least one measure
+ * the API knows; the draft does not hold the measures, so that is the
+ * caller's to check. An answer the calculation does not read
  * (rent when not renting, a partner's answers without a partner, a State
  * Pension under State Pension age) is not checked.
  */

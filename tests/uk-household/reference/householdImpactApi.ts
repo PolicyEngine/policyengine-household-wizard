@@ -13,8 +13,10 @@ import { fileURLToPath } from 'node:url';
  * checks a body the way pydantic does: fields, types, bounds, null, unknown
  * keys, and pydantic's lax conversions (a number in text, true as 1, "yes"
  * as true). The models' four validators are copied below by hand; the
- * capture fails if they change. apiMirror.test.ts checks that every case in
- * the fixture gets pydantic's own verdict here.
+ * capture stops if one is added, removed or renamed, and apiMirror.test.ts
+ * fails if one's code changes (`MIRRORED_VALIDATORS`). apiMirror.test.ts
+ * also checks that every case in the fixture gets pydantic's own verdict
+ * here.
  *
  * Each refusal is pydantic's error: where (`household.children.0.age`, or
  * `(body)` for the whole body) and its type (`less_than_equal`).
@@ -68,6 +70,8 @@ export interface ApiCapture {
     salary_year: number;
   };
   schema: Schema;
+  /** The code of HouseholdImpactRequest's validators, as `ast.unparse` gives it. */
+  validators: Record<string, string>;
   base: Record<string, unknown>;
   cases: ApiCase[];
 }
@@ -193,7 +197,8 @@ class Check {
   boolean(value: unknown, loc: string): Result {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') {
-      if (isFloatText(value)) return this.fail(loc, 'bool_type');
+      // A float, or an integer past an int64, is not one pydantic reads as a bool
+      if (isFloatText(value) || Math.abs(value) >= INT_LIMIT) return this.fail(loc, 'bool_type');
       return value === 0 || value === 1 ? value === 1 : this.fail(loc, 'bool_parsing');
     }
     if (typeof value === 'string') {
@@ -241,6 +246,41 @@ function definition(ref: string): Schema {
   return found;
 }
 
+/**
+ * The validators `apiRefusals` copies, in the code it copied them from. When
+ * the dashboard changes one, the captured code stops matching this
+ * (apiMirror.test.ts): copy the new rule into `apiRefusals`, then its code
+ * here.
+ */
+export const MIRRORED_VALIDATORS: Record<string, string> = {
+  _salary_year: `@field_validator('household')
+@classmethod
+def _salary_year(cls, household: 'HouseholdAnswersRequest'):
+    if household.salary_year not in POLICY_YEARS:
+        raise ValueError(f'household.salary_year: choose a year from {POLICY_YEARS[0]} to {POLICY_YEARS[-1]}')
+    return household`,
+  _salary_not_after_year: `@model_validator(mode='after')
+def _salary_not_after_year(self):
+    if self.household.salary_year > self.year:
+        raise ValueError('household.salary_year must not be after year: salaries are grown forward to the chosen year')
+    return self`,
+  _policy_year: `@field_validator('year')
+@classmethod
+def _policy_year(cls, year: int) -> int:
+    if year not in POLICY_YEARS:
+        raise ValueError(f'Choose a year from {POLICY_YEARS[0]} to {POLICY_YEARS[-1]}')
+    return year`,
+  _known_measures: `@field_validator('policies')
+@classmethod
+def _known_measures(cls, policies: Optional[list[str]]):
+    if policies is None:
+        return policies
+    unknown = sorted(set(policies) - set(household_impact.measure_ids()))
+    if unknown:
+        raise ValueError(f"Unknown measures: {', '.join(unknown)}")
+    return policies`,
+};
+
 /** The reasons the API would refuse a request body (sent as JSON), or none. */
 export function apiRefusals(body: unknown): string[] {
   // The API sees the JSON text: undefined fields are left out
@@ -263,11 +303,12 @@ export function apiRefusals(body: unknown): string[] {
   if (Array.isArray(policies) && policies.some((id) => !MEASURE_IDS.includes(id as string))) {
     check.fail('policies', 'value_error');
   }
+  // pydantic does not validate a default, so _salary_year sees only a
+  // household that was sent
   const householdDefaults = definition(properties.household.$ref!).properties!;
-  const household = Object.hasOwn(request, 'household')
-    ? field('household')
-    : { salary_year: householdDefaults.salary_year.default };
-  if (household !== FAILED && household !== undefined) {
+  const sent = Object.hasOwn(request, 'household');
+  const household = sent ? field('household') : { salary_year: householdDefaults.salary_year.default };
+  if (sent && household !== FAILED) {
     const salaryYear = (household as { salary_year: number }).salary_year;
     if (!POLICY_YEARS.includes(salaryYear)) check.fail('household', 'value_error');
   }

@@ -64,7 +64,11 @@ export interface HouseholdImpactRequest {
 export interface ToHouseholdImpactRequestOptions {
   /** The policy year (2027 is 2027-28). */
   year: number;
-  /** The measures to compare the household under. */
+  /**
+   * The measures to compare the household under, sent as given: at least
+   * one, each an id the API knows (it refuses an empty list and an unknown
+   * id).
+   */
   policies: readonly string[];
   /** The slower parts to compute besides the headline; none by default. */
   include?: readonly HouseholdImpactPart[];

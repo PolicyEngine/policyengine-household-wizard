@@ -77,8 +77,9 @@ choices, listed on `createTypicalDraft`.
 `message`. It checks only what the calculation reads, against the bounds and
 policy years the household impact API applies (`UK_HOUSEHOLD_LIMITS` and
 `UK_POLICY_YEARS`, 2026 to 2031), so a draft that passes builds a request the
-API accepts when it is sent with measures and parts the API knows. Pass
-`years` to check against an app's own policy years instead.
+API accepts when it is sent with at least one measure the API knows (it
+refuses an empty `policies` list) and parts it knows. Pass `years` to check
+against an app's own policy years instead.
 
 | Code | When |
 | --- | --- |
@@ -118,7 +119,9 @@ sy=2026&region=LONDON&tenure=RENT_PRIVATELY&rent=1500&band=D&uc=1
 The keys are documented in `src/uk-household/serialize.ts`. A draft read
 back from its link is the same draft, except that a private pension left out
 (`null` or `undefined`) comes back as 0 and electricity left out as `null`:
-each means the same and gives the same request. Reading never throws:
+each means the same and gives the same request. Also, -0 comes back as 0,
+and an age or amount that is not a finite number is not written, so it comes
+back blank. Reading never throws:
 unknown codes come back unanswered and amounts that are not numbers come
 back blank. `extras` are not written.
 
@@ -165,8 +168,11 @@ each kind of value pydantic converts or refuses, unknown and prototype keys,
 the year rules, random combinations of these, and the 32 dashboard requests.
 `apiMirror.test.ts` checks that the mirror gives every one pydantic's
 verdict, errors included. The models' four validators (the policy year, the
-salary year twice, and the measures) are copied into the mirror by hand, and
-the capture stops if they change.
+salary year twice, and the measures) are copied into the mirror by hand. The
+capture stops if a validator is added, removed or renamed, or if the code it
+reads the measures and policy years through changes. It records each
+validator's code, so `apiMirror.test.ts` fails when one changes until the
+mirror copies it again.
 
 When the dashboard's API changes, rerun the capture (its docstring has the
 command), then update `UK_HOUSEHOLD_LIMITS`, `UK_POLICY_YEARS` and the

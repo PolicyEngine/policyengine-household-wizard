@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import households from '../fixtures/uk/dashboard-households.json' with { type: 'json' };
-import { API, apiRefusals, type ApiCase } from './reference/householdImpactApi';
+import { API, MIRRORED_VALIDATORS, apiRefusals, type ApiCase } from './reference/householdImpactApi';
 
 /**
  * A differential test: reference/householdImpactApi.ts against the
@@ -34,7 +34,7 @@ function bodyFor(apiCase: ApiCase): unknown {
 describe('the household impact API mirror', () => {
   it('is captured from the dashboard’s models, with cases on both sides', () => {
     expect(API.source.commit).toMatch(/^[0-9a-f]{40}$/);
-    expect(API.cases.length).toBeGreaterThan(2500);
+    expect(API.cases.length).toBeGreaterThan(3000);
     expect(API.cases.filter((apiCase) => apiCase.accepted).length).toBeGreaterThan(500);
     expect(API.cases.filter((apiCase) => !apiCase.accepted).length).toBeGreaterThan(1500);
     expect(apiRefusals(API.base)).toEqual([]);
@@ -47,6 +47,10 @@ describe('the household impact API mirror', () => {
       return same ? [] : [{ name: apiCase.name, pydantic: apiCase.errors, mirror: errors }];
     });
     expect(disagreements).toEqual([]);
+  });
+
+  it('copies the validators the dashboard’s request model has now', () => {
+    expect(API.validators).toEqual(MIRRORED_VALIDATORS);
   });
 
   it('reads the choices the dashboard’s request models name', () => {
