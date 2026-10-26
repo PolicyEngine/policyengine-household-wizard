@@ -165,44 +165,65 @@ round-trip through links.
 mirror of the validation the API's endpoint does before its own code runs.
 It reads the request models' JSON schema and choices (regions, measures,
 policy years and the rest) from `tests/fixtures/uk/household-impact-api.json`,
-which `tests/fixtures/uk/capture_household_impact_api.py` writes. The capture
-serves the dashboard's own models from a FastAPI endpoint that takes the
-body as a `HouseholdImpactRequest`, as the dashboard's does, and posts it
-4,394 bodies: each field set to each kind of value pydantic converts or
-refuses (number text included, down to underscores and integer text longer
-than 4,300 characters, the minus sign counted), unknown and prototype keys,
-text holding an unpaired surrogate, the year rules, random combinations of
-these, and the 32 dashboard requests. It records each verdict and the errors
-in each 422. A body holding an unpaired surrogate gets a 500 instead, which
-the mirror gives as `(body): server_error`. What the endpoint's own code
-refuses once it runs (a `ValueError` is a 400, a calculation past its time
-limit a 504) is not covered. The capture stops unless pydantic,
-pydantic-core, FastAPI and Starlette are the versions the dashboard's
-`uv.lock` pins, and it reads policyengine-uk's choices at the version the
-lock pins. `apiMirror.test.ts` checks that the mirror gives every body the
-same verdict and errors.
+which `tests/fixtures/uk/capture_household_impact_api.py` writes.
 
-The models' four validators (the policy year, the salary year twice, and the
-measures) are copied into the mirror by hand. The capture stops if a
-validator is added, removed or renamed. It records each validator's code, so
-`apiMirror.test.ts` fails when one changes until the mirror copies it again.
-It also stops if the dashboard changes, in the files it reads:
+The capture runs the dashboard's own API. It exports a commit with
+`git archive`, installs exactly what that commit's `uv.lock` pins
+(`uv run --frozen --exact`), and checks that the files are the commit's,
+that every package installed (each copy, if one shadows another) is the
+locked version, and that pydantic, pydantic-core, FastAPI, Starlette and
+policyengine-uk are imported from those installs. It then imports
+`uk_budget_data.api`, replaces only the calculation
+(`household_impact.calculate_household_impact`) with one that counts its
+calls, starts the app's lifespan as the server does, and posts `app` 7,878
+bodies through Starlette's test client: each field set to each kind of value
+pydantic converts or refuses (number text included, down to underscores and
+integer text longer than 4,300 characters, the minus sign counted), each
+household field again with a partner, unknown and prototype keys, text
+holding an unpaired surrogate, the year rules, random combinations of these,
+and the 32 dashboard requests. It records each verdict, its status and the
+errors in each refusal. An accepted body must have reached the calculation
+exactly once. A refused one must not have reached it, and must be a 422, or
+the 500 the API gives when an error it would report holds an unpaired
+surrogate, which cannot be written as UTF-8. The capture stops on anything
+else, since what the endpoint's own code refuses once it runs (a
+`ValueError` is a 400, a calculation past its time limit a 504) is not
+covered.
 
-- how `api.py` builds and changes `app`: `FastAPI(...)` with its keywords
-  (exception handlers among them), middleware, handlers set later, each
-  route, the household impact route's whole signature, and any function that
-  uses `app`. Documentation keywords such as `summary` are left out, so
-  changing them does not stop it;
-- the statements that bind or change the names the choices, the bounds, the
-  models, `measure_ids`, the reform list and its cache, the combined
-  measure's id and `POLICY_YEARS` are read through, or the names `api.py`
-  imports for them. Changing a value in place counts: setting or deleting an
-  item or attribute, a method such as `pop` or `update`, or `setattr`. The
-  choices, bounds and models must each be bound by one statement and never
-  changed;
-- the id the combined reform is built with.
+`apiMirror.test.ts` checks that the mirror gives every body the same
+verdict, status and errors. The capture runs the app as the dashboard
+wrote it (its middleware, exception handlers, routes, models and the values
+they read), so a change that alters the API's answer to any case alters the
+fixture. The fixture also records what the mirror copies, so a change no
+case shows still fails the test:
 
-It reads the measures' ids from `_MEASURE_FACTORIES` itself.
+- `features`: each pydantic feature the models' core schema uses, such as
+  `int.ge` or `model.config.extra_fields_behavior='forbid'`. The test fails
+  on any the mirror does not implement (`MIRRORED_FEATURES`), so strict
+  mode, string trimming or a new validator type cannot pass unnoticed.
+- `validators`: the code of the models' four validators (the policy year,
+  the salary year twice, and the measures), which the mirror copies by
+  hand. The test fails when one is added, removed or changed until the
+  mirror copies it again.
+- `choices`: the policy years and measure ids are read through the
+  validators' own globals, as the validators read them; the other choices
+  come from the JSON schema's enums. The capture reads them again after the
+  cases and stops if they changed.
+- `code`: every other function of the dashboard's that ran while the API
+  answered the cases, found with `sys.monitoring` in every thread: the
+  endpoint, the code before and after the calculation (the definitions
+  query, checking the request again, building the answers, the workers,
+  timing), and the lifespan. The mirror lists the sha256 of each one's code
+  as read (`REVIEWED_DASHBOARD_CODE`), and the test fails when one changes,
+  is added or no longer runs. That covers code that refuses a body no case
+  sends, such as a check added to `answers()`: read the new code, follow in
+  the mirror anything it refuses before the calculation, then record its
+  hash. The code is recorded as `ast.unparse` gives it without docstrings,
+  so formatting and docstrings do not count, but the route's decorator and
+  parameters do, documentation keywords such as `summary` included.
+
+`--source` and `--python` run the capture on an export and environment made
+before, without a network.
 
 When the dashboard's API changes, rerun the capture (its docstring has the
 command), then update `UK_HOUSEHOLD_LIMITS`, `UK_POLICY_YEARS` and the

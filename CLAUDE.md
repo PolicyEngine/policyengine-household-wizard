@@ -91,6 +91,11 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   `tests/fixtures/uk/capture_household_impact_api.py` (its docstring has the
   command): the API mirror, `reference/householdImpactApi.ts`, reads their
   schema from the fixture it writes, and `apiMirror.test.ts` checks the
-  mirror against the verdicts of a FastAPI endpoint serving those models.
+  mirror against the verdicts of the dashboard's own app, run at that commit
+  in the environment its `uv.lock` pins. It also fails on a pydantic feature
+  the models use that the mirror does not implement (`MIRRORED_FEATURES`),
+  on a changed validator until the mirror copies it, and on a change to any
+  other dashboard code that runs while the API answers until it is read and
+  its hash recorded (`REVIEWED_DASHBOARD_CODE`).
 - New country → mirror the structure of `src/us-household/` and
   `src/uk-household/` rather than mixing into either.

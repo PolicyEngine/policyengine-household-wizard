@@ -1,480 +1,304 @@
 """Capture what the household impact API accepts, for the wizard's tests.
 
 The Autumn Budget 2026 dashboard checks a ``POST /api/household-impact`` body
-with three pydantic models in its ``src/uk_budget_data/api.py``
-(``HouseholdChildRequest``, ``HouseholdAnswersRequest`` and
-``HouseholdImpactRequest``), which its FastAPI endpoint takes the body as.
-This script reads those classes, and the choices they name, from git at the
-given commits, serves them from a FastAPI endpoint of the same shape, and
-writes ``household-impact-api.json`` next to it:
+with pydantic models in its ``src/uk_budget_data/api.py``. This script runs
+the dashboard's own API at a commit, in the environment its ``uv.lock`` pins,
+posts it each case below, and writes ``household-impact-api.json`` next to
+it:
 
 - ``choices``: the regions, tenures, student loan plans, Council Tax bands,
   Broad Rental Market Areas, local authorities, parts, policy years and
-  measure ids the models accept;
+  measure ids the API accepts;
+- ``schema``, ``validators`` and ``features``: the body model's JSON schema,
+  the code of its validators, and the pydantic features its core schema
+  uses, which ``reference/householdImpactApi.ts`` mirrors;
+- ``code``: the code of the dashboard's other functions that ran while it
+  answered the cases, which the mirror lists as read;
 - ``base`` and ``cases``: a valid body, and changes to it (one field set to
-  each kind of value pydantic might take or refuse, children, unknown and
-  prototype keys, the year rules, random combinations of these, and the
-  requests in ``dashboard-households.json``), each with the endpoint's
-  verdict: accepted or not, and the location and type of each error in its
-  422.
+  each kind of value pydantic might take or refuse, each household field
+  again with a partner, children, unknown and prototype keys, the year
+  rules, random combinations of these, and the requests in
+  ``dashboard-households.json``), each with the API's verdict: accepted or
+  not, the location and type of each error FastAPI reports, and a 500.
 
-``tests/uk-household/apiMirror.test.ts`` checks that
-``reference/householdImpactApi.ts`` gives every case the same verdict.
+Only the calculation is replaced (``household_impact.calculate_household_impact``),
+so the API answers at once. Everything else runs as the dashboard wrote
+it: the app and its lifespan, its middleware, FastAPI's validation of the
+body and the endpoint's own code before and after the calculation. The script stops if a case
+is refused anywhere but FastAPI's validation, since the mirror covers only
+that. ``tests/uk-household/apiMirror.test.ts`` checks that the mirror gives
+every case the same verdict.
 
-The classes are run on their own, with the choices they read from
-``household_impact`` filled in, so neither policyengine-uk nor the dashboard
-needs installing. Run it from the wizard's root, with the pydantic,
-pydantic-core, FastAPI and Starlette versions the dashboard's ``uv.lock``
-pins at that commit (the script stops on any other):
+Run it from the wizard's root; it needs git and uv:
 
-    uv run --no-project --python 3.13 --with pydantic==2.12.5 \\
-      --with fastapi==0.122.0 --with starlette==0.50.0 --with httpx==0.28.1 \\
-      tests/fixtures/uk/capture_household_impact_api.py \\
-      --dashboard ~/PolicyEngine/uk-autumn-budget-dashboard-2026 \\
-      --commit <dashboard commit> \\
-      --policyengine-uk ~/PolicyEngine/policyengine-uk
+    uv run --no-project --python 3.13 tests/fixtures/uk/capture_household_impact_api.py \\
+      --dashboard ~/PolicyEngine/uk-autumn-budget-dashboard-2026 --commit <commit>
 
-It reads policyengine-uk at the version ``uv.lock`` pins (its git tag).
+It exports the commit's files to a temporary directory with ``git archive``,
+so the dashboard's checkout is not touched, and runs itself there with
+``uv run --frozen --exact``, which installs exactly what ``uv.lock`` pins.
+``--source DIR`` uses an export made before, and ``--python`` the
+interpreter of an environment already synced to its lock, so the capture
+can run without a network. Either way it checks that the files are the
+commit's, that every installed package is the version ``uv.lock`` pins,
+and that the packages deciding the verdicts are imported from those
+installs.
 """
 
 import argparse
 import ast
 import copy
+import hashlib
+import importlib.metadata
+import inspect
 import json
 import random
+import re
 import subprocess
+import sys
+import tarfile
+import tempfile
+import textwrap
 import tomllib
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Literal, Optional
-
-import fastapi
-import pydantic
-import pydantic_core
-import starlette
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "household-impact-api.json"
-MODELS = ("HouseholdChildRequest", "HouseholdAnswersRequest", "HouseholdImpactRequest")
+ROUTE = "/api/household-impact"
 SEED = 20261025
 COMBINATIONS = 400
+# The packages whose versions decide the verdicts, recorded in the fixture
+DECIDING = ("policyengine-uk", "pydantic", "pydantic-core", "fastapi", "starlette")
 
 
-def git_show(repo: Path, rev: str, path: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(repo), "show", f"{rev}:{path}"], check=True, capture_output=True, text=True
-    ).stdout
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
 
 
 def resolve_commit(repo: Path, rev: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", f"{rev}^{{commit}}"], check=True, capture_output=True, text=True
-    ).stdout.strip()
+    return git(repo, "rev-parse", f"{rev}^{{commit}}").strip()
 
 
-# The packages that decide the verdicts, and the versions running here
-RUNNING = {
-    "pydantic": pydantic.VERSION,
-    "pydantic-core": pydantic_core.__version__,
-    "fastapi": fastapi.__version__,
-    "starlette": starlette.__version__,
-}
+# --- The dashboard's files and environment -------------------------------------
 
 
-def locked_versions(dashboard: Path, commit: str) -> dict[str, str]:
-    """The versions the dashboard's uv.lock pins at the commit."""
-    lock = tomllib.loads(git_show(dashboard, commit, "uv.lock"))
-    return {package["name"]: package["version"] for package in lock["package"] if "version" in package}
+def export(dashboard: Path, commit: str, into: Path):
+    """The commit's files, from ``git archive``, so no checkout is touched."""
+    archive = subprocess.Popen(["git", "-C", str(dashboard), "archive", commit], stdout=subprocess.PIPE)
+    with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+        tar.extractall(into, filter="data")
+    assert archive.wait() == 0, "git archive failed"
 
 
-def module_assignments(tree: ast.Module) -> dict[str, ast.expr]:
-    values = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            values[node.targets[0].id] = node.value
-    return values
+# What syncing an export adds to it: the environment, the project's
+# metadata and Python's caches
+BUILT = re.compile(r"(^\.venv/|^src/[^/]+\.egg-info/|(^|/)__pycache__/)")
 
 
-def enum_names(uk: Path, version: str, module: str, name: str) -> tuple[str, ...]:
-    """The member names of policyengine-uk's enum ``name`` in ``module``."""
-    tree = ast.parse(git_show(uk, version, module.replace(".", "/") + ".py"))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == name:
-            members = [
-                (target.id, ast.literal_eval(statement.value))
-                for statement in node.body
-                if isinstance(statement, ast.Assign)
-                for target in statement.targets
-                if isinstance(target, ast.Name)
-            ]
-            # Iterating an Enum skips aliases (members sharing a value), so
-            # every name is a member only while the values are distinct
-            values = [value for _, value in members]
-            assert len(set(values)) == len(values), f"{name} has aliases"
-            return tuple(member for member, _ in members)
-    raise SystemExit(f"No enum {name} in policyengine-uk's {module}")
-
-
-def household_impact_choices(dashboard: Path, commit: str, uk: Path, version: str) -> SimpleNamespace:
-    source = git_show(dashboard, commit, "src/uk_budget_data/household_impact.py")
-    tree = ast.parse(source)
-    imported = {
-        alias.asname or alias.name: node.module
-        for node in tree.body
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("policyengine_uk")
-        for alias in node.names
+def check_source(dashboard: Path, commit: str, source: Path):
+    """Stop unless ``source`` holds exactly the commit's files, apart from
+    what syncing it builds."""
+    tracked = {}
+    for entry in git(dashboard, "ls-tree", "-r", "-z", "--full-tree", commit).split("\0"):
+        if entry:
+            meta, path = entry.split("\t", 1)
+            mode, kind, blob = meta.split()
+            assert kind == "blob" and mode in ("100644", "100755"), f"{path} is a {mode} {kind}"
+            tracked[path] = blob
+    found = {
+        path.relative_to(source).as_posix()
+        for path in source.rglob("*")
+        if (path.is_file() or path.is_symlink()) and not BUILT.search(path.relative_to(source).as_posix())
     }
-    assigned = module_assignments(tree)
-    read = (
-        "REGIONS", "TENURES", "OLDEST_CHILD_AGE", "SALARY_YEAR", "PARTS", "ELECTRICITY_SPENDING",
-        "STUDENT_LOAN_PLANS", "BRMAS", "LOCAL_AUTHORITIES", "COUNCIL_TAX_BANDS",
+    assert found == set(tracked), (
+        f"{source} is not the commit's files: extra {sorted(found - set(tracked))[:5]}, "
+        f"missing {sorted(set(tracked) - found)[:5]}"
     )
-    bound_once(tree, "household_impact.py", *read)
-    choices = {}
-    for name in ("REGIONS", "TENURES", "OLDEST_CHILD_AGE", "SALARY_YEAR", "PARTS"):
-        choices[name] = ast.literal_eval(assigned[name])
-    # round(20.00 * 52): arithmetic on literals only
-    electricity = assigned["ELECTRICITY_SPENDING"]
-    assert ast.unparse(electricity) == "round(20.0 * 52)", ast.unparse(electricity)
-    choices["ELECTRICITY_SPENDING"] = round(20.00 * 52)
-    # Each is `tuple(member.name for member in <policyengine-uk enum>)`
-    for name in ("STUDENT_LOAN_PLANS", "BRMAS", "LOCAL_AUTHORITIES", "COUNCIL_TAX_BANDS"):
-        value = assigned[name]
-        assert isinstance(value, ast.Call) and ast.unparse(value.func) == "tuple", ast.unparse(value)
-        generator = value.args[0]
-        assert isinstance(generator, ast.GeneratorExp), ast.unparse(value)
-        assert ast.unparse(generator.elt) == f"{generator.generators[0].target.id}.name", ast.unparse(value)
-        enum = generator.generators[0].iter.id
-        bound_once(tree, "household_impact.py", enum)
-        choices[name] = enum_names(uk, version, imported[enum], enum)
-    return SimpleNamespace(**choices)
+    for path, blob in tracked.items():
+        data = (source / path).read_bytes()
+        assert hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest() == blob, f"{path} differs from the commit's"
 
 
-DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-# The methods that change a list, dict or set in place
-MUTATORS = {
-    "append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse", "update", "setdefault",
-    "popitem", "add", "discard", "__setitem__", "__delitem__", "__setattr__", "__delattr__",
-}
+def canonical(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def chain_root(node: ast.expr) -> str | None:
-    """The name an attribute or subscript chain starts from (``a`` in ``a.b[0]``)."""
-    while isinstance(node, (ast.Attribute, ast.Subscript)):
-        node = node.value
-    return node.id if isinstance(node, ast.Name) else None
-
-
-def changed_names(node: ast.AST) -> set[str]:
-    """The names whose values the code changes in place: an attribute or item
-    set or deleted (``a.b = …``, ``del a[0]``), a mutating method called
-    (``a.pop()``), or ``setattr``/``delattr`` on one."""
-    names = set()
-    for child in ast.walk(node):
-        if isinstance(child, (ast.Attribute, ast.Subscript)) and isinstance(child.ctx, (ast.Store, ast.Del)):
-            names.add(chain_root(child))
-        elif isinstance(child, ast.Call):
-            if isinstance(child.func, ast.Attribute) and child.func.attr in MUTATORS:
-                names.add(chain_root(child.func.value))
-            elif isinstance(child.func, ast.Name) and child.func.id in ("setattr", "delattr") and child.args:
-                names.add(chain_root(child.args[0]))
-    return names - {None}
-
-
-def bound_names(statement: ast.stmt) -> set[str]:
-    """The module's names a top-level statement binds or changes: what it
-    assigns, defines or imports, what a function it defines declares
-    ``global``, and what it changes in place (``changed_names``, in a
-    function's body too)."""
-    if isinstance(statement, DEFINITIONS):
-        declared = {name for node in ast.walk(statement) if isinstance(node, ast.Global) for name in node.names}
-        return {statement.name} | declared | changed_names(statement)
-    names = changed_names(statement)
-    for node in ast.walk(statement):
-        if isinstance(node, DEFINITIONS):
-            names.add(node.name)
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            names.add(node.id)
-    return names
-
-
-def bound_once(tree: ast.Module, where: str, *names: str):
-    """Stop unless each name is bound by one top-level statement and never
-    changed: the capture reads its one value."""
-    for name in names:
-        found = bindings(tree, name)
-        assert len(found) == 1, f"{where} binds or changes {name} {len(found)} times: {found}"
-
-
-def bindings(tree: ast.Module, name: str) -> list[str]:
-    """Each top-level statement that binds ``name``, as ``ast.unparse`` gives
-    it: a function or class without its docstring, and an import as the one
-    name it brings in."""
-    found = []
-    for statement in tree.body:
-        if name not in bound_names(statement):
+def check_environment(dashboard: Path, commit: str) -> dict[str, str]:
+    """Stop unless every package installed here is the version the
+    dashboard's ``uv.lock`` pins at the commit, and the deciding packages
+    are imported from those installs; the deciding versions."""
+    lock = tomllib.loads(git(dashboard, "show", f"{commit}:uv.lock"))
+    locked = {canonical(package["name"]): package.get("version") for package in lock["package"]}
+    project = canonical(tomllib.loads(git(dashboard, "show", f"{commit}:pyproject.toml"))["project"]["name"])
+    # Every copy on the path, so one shadowing another is checked too. The
+    # project's own (its install, and the egg-info a build leaves in src/)
+    # is imported from the source, which check_source checks
+    installed = {}
+    for dist in importlib.metadata.distributions():
+        name = canonical(dist.metadata["Name"])
+        if name == project:
             continue
-        if isinstance(statement, (ast.Import, ast.ImportFrom)):
-            source = (
-                f"from {'.' * statement.level}{statement.module or ''} import "
-                if isinstance(statement, ast.ImportFrom)
-                else "import "
-            )
-            found += [
-                source + alias.name + (f" as {alias.asname}" if alias.asname else "")
-                for alias in statement.names
-                if (alias.asname or alias.name).split(".")[0] == name
+        assert name not in installed, f"{name} is installed twice ({installed[name]}, {dist.version})"
+        installed[name] = dist.version
+        assert locked.get(name) == dist.version, f"{name} {dist.version} is installed, but uv.lock pins {locked.get(name)}"
+    for name in DECIDING:
+        module = importlib.import_module(name.replace("-", "_"))
+        files = {Path(importlib.metadata.distribution(name).locate_file(file)).resolve() for file in importlib.metadata.files(name)}
+        assert Path(module.__file__).resolve() in files, f"{module.__name__} is imported from {module.__file__}, not its install"
+    return {name: installed[name] for name in DECIDING}
+
+
+# --- What the mirror reads from the models ---------------------------------------
+
+
+# Keys of the core schema that hold other nodes, or that only document it
+NESTED = {"schema", "items_schema", "fields", "definitions", "choices", "metadata", "serialization"}
+NAMES = {"ref", "model_name", "schema_ref"}
+# Keys whose values are data the JSON schema holds (a default, the choices,
+# a bound), recorded by key only
+DATA = {"default", "expected", "ge", "le", "gt", "lt", "max_length", "min_length", "multiple_of"}
+
+
+def core_schema_features(schema) -> tuple[list[str], list, list]:
+    """The pydantic features the core schema uses, as ``type``,
+    ``type.key`` or ``type.key=value`` (a setting), with the functions it
+    calls and the models it builds."""
+    features, functions, models = set(), [], []
+
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not isinstance(node, dict):
+            return
+        kind = node.get("type")
+        if not isinstance(kind, str):
+            for value in node.values():
+                walk(value)
+            return
+        features.add(kind)
+        for key, value in node.items():
+            if key == "type" or key in NAMES:
+                continue
+            if key == "config":
+                features.update(f"{kind}.config.{name}={setting!r}" for name, setting in value.items() if name != "title")
+            elif key == "function":
+                features.add(f"{kind}.function.{value['type']}")
+                functions.append(value["function"])
+            elif key == "cls":
+                if value not in models:
+                    models.append(value)
+            elif key == "computed_fields":
+                assert not value, f"computed fields: {value}"
+            elif key in DATA or key in NESTED or not isinstance(value, (bool, int, str, type(None))):
+                if key not in ("metadata", "serialization"):
+                    features.add(f"{kind}.{key}")
+            else:
+                features.add(f"{kind}.{key}={value!r}")
+            # Into every node it holds, but not into data, documentation or
+            # a function
+            if key not in DATA and key not in ("metadata", "serialization", "function", "cls", "config"):
+                walk(value)
+
+    walk(schema)
+    return sorted(features), functions, models
+
+
+# The kinds of decorator pydantic gives a model; the mirror copies validators
+DECORATORS = (
+    "validators", "field_validators", "root_validators", "field_serializers", "model_serializers",
+    "model_validators", "computed_fields",
+)
+
+
+def validator_code(models: list, functions: list) -> tuple[dict[str, str], dict, list]:
+    """The code of each model's validators, by name, as ``ast.unparse``
+    gives it, the module globals they read, and the functions. Stops on a
+    function in the core schema that is not one of them."""
+    validators, unwrapped = {}, {}
+    for model in models:
+        decorators = model.__pydantic_decorators__
+        for kind in DECORATORS:
+            if kind not in ("field_validators", "model_validators"):
+                assert not getattr(decorators, kind), f"{model.__name__} has {kind}"
+        for kind in ("field_validators", "model_validators"):
+            for name, decorator in getattr(decorators, kind).items():
+                assert name not in validators, f"Two validators are named {name}"
+                function = getattr(decorator.func, "__func__", decorator.func)
+                source = textwrap.dedent(inspect.getsource(function))
+                validators[name] = ast.unparse(ast.parse(source).body[0])
+                unwrapped[id(function)] = function
+    called = {id(getattr(function, "__func__", function)) for function in functions}
+    assert called == set(unwrapped), "The core schema calls functions that are not the models' validators"
+    namespaces = {id(function.__globals__): function.__globals__ for function in unwrapped.values()}
+    assert len(namespaces) == 1, "The validators are defined in more than one module"
+    return dict(sorted(validators.items())), next(iter(namespaces.values())), list(unwrapped.values())
+
+
+# --- The dashboard's code that runs ----------------------------------------------
+
+
+class DashboardCode:
+    """The dashboard's own functions that start while this is open, in any
+    thread, found with ``sys.monitoring``: its endpoint, the code that runs
+    before and after the calculation, its lifespan. Each is seen once."""
+
+    def __init__(self, src: Path, skip):
+        self.src = src.resolve()
+        self.skip = {function.__code__ for function in skip}
+        self.codes = {}
+
+    def __enter__(self):
+        monitoring = sys.monitoring
+        self.tool = next(tool for tool in range(6) if monitoring.get_tool(tool) is None)
+        monitoring.use_tool_id(self.tool, "capture")
+        monitoring.register_callback(self.tool, monitoring.events.PY_START, self.started)
+        monitoring.set_events(self.tool, monitoring.events.PY_START)
+        return self
+
+    def started(self, code, offset):
+        if code not in self.skip and Path(code.co_filename).resolve().is_relative_to(self.src):
+            self.codes[code] = None
+        return sys.monitoring.DISABLE
+
+    def __exit__(self, *exception):
+        monitoring = sys.monitoring
+        monitoring.set_events(self.tool, 0)
+        monitoring.register_callback(self.tool, monitoring.events.PY_START, None)
+        monitoring.free_tool_id(self.tool)
+
+    def record(self) -> dict[str, str]:
+        """Each function's code, as ``ast.unparse`` gives it without its
+        docstring, by module and qualified name. A generator expression is
+        part of the function it is in."""
+        record = {}
+        for code in self.codes:
+            if code.co_name.startswith("<") and code.co_name != "<lambda>":
+                continue
+            path = Path(code.co_filename).resolve()
+            module = ".".join(path.relative_to(self.src).with_suffix("").parts)
+            nodes = [
+                node
+                for node in ast.walk(ast.parse(path.read_text()))
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+                and getattr(node, "name", "<lambda>") == code.co_name
+                and (node.decorator_list[0].lineno if getattr(node, "decorator_list", None) else node.lineno)
+                == code.co_firstlineno
             ]
-            continue
-        if isinstance(statement, DEFINITIONS) and ast.get_docstring(statement) is not None:
-            statement = copy.copy(statement)
-            statement.body = statement.body[1:] or [ast.Pass()]
-        found.append(ast.unparse(statement))
-    return found
+            assert nodes, f"No code for {module}:{code.co_qualname}"
+            record.setdefault(f"{module}:{code.co_qualname}", set()).update(map(undocumented, nodes))
+        return {name: "\n".join(sorted(sources)) for name, sources in sorted(record.items())}
 
 
-def function(tree: ast.Module, name: str) -> ast.FunctionDef:
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == name:
-            return node
-    raise SystemExit(f"No function {name}")
+def undocumented(node) -> str:
+    node = copy.deepcopy(node)
+    body = getattr(node, "body", None)
+    if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        if isinstance(body[0].value.value, str):
+            node.body = body[1:] or [ast.Pass()]
+    return ast.unparse(node)
 
-
-GET_REFORMS = """\
-def _get_autumn_budget_2026_reforms() -> list[Reform]:
-    global _AUTUMN_BUDGET_2026_REFORMS_CACHE
-    if _AUTUMN_BUDGET_2026_REFORMS_CACHE is None:
-        members = [factory() for factory in _MEASURE_FACTORIES]
-        _AUTUMN_BUDGET_2026_REFORMS_CACHE = [_create_combined_autumn_budget_reform(members), *members]
-    return _AUTUMN_BUDGET_2026_REFORMS_CACHE"""
-
-# The names the choices and the models' rules are read through, by file, and
-# the statements that bind each (`bindings`). The capture stops if one changes
-# or another statement binds the name, since the reading would then be wrong.
-WIRING = {
-    ("household_impact.py", "measure_ids"): [
-        "def measure_ids() -> list[str]:\n"
-        "    return [reform.id for reform in get_autumn_budget_2026_reforms() "
-        "if reform.id != AUTUMN_BUDGET_2026_COMBINED_ID]"
-    ],
-    ("household_impact.py", "get_autumn_budget_2026_reforms"): [
-        "from uk_budget_data.reforms import get_autumn_budget_2026_reforms"
-    ],
-    ("household_impact.py", "AUTUMN_BUDGET_2026_COMBINED_ID"): [
-        "from uk_budget_data.reforms import AUTUMN_BUDGET_2026_COMBINED_ID"
-    ],
-    ("reforms.py", "get_autumn_budget_2026_reforms"): [
-        "def get_autumn_budget_2026_reforms() -> list[Reform]:\n    return _get_autumn_budget_2026_reforms()"
-    ],
-    ("reforms.py", "_get_autumn_budget_2026_reforms"): [GET_REFORMS],
-    ("reforms.py", "_AUTUMN_BUDGET_2026_REFORMS_CACHE"): [
-        "_AUTUMN_BUDGET_2026_REFORMS_CACHE: list[Reform] | None = None",
-        GET_REFORMS,
-    ],
-    ("reforms.py", "AUTUMN_BUDGET_2026_COMBINED_ID"): [
-        "AUTUMN_BUDGET_2026_COMBINED_ID = 'autumn_budget_2026_combined'"
-    ],
-    ("budget_years.py", "_CONFIG"): [
-        "_CONFIG = json.loads(files('uk_budget_data').joinpath('budget_years.json').read_text())"
-    ],
-    ("budget_years.py", "POLICY_YEARS"): ["POLICY_YEARS = _CONFIG['policy_years']"],
-    ("api.py", "POLICY_YEARS"): ["from uk_budget_data.budget_years import POLICY_YEARS"],
-    ("api.py", "household_impact"): ["from uk_budget_data import household_impact"],
-    # The names request_models fills in for the classes
-    ("api.py", "BaseModel"): ["from pydantic import BaseModel"],
-    ("api.py", "Field"): ["from pydantic import Field"],
-    ("api.py", "field_validator"): ["from pydantic import field_validator"],
-    ("api.py", "model_validator"): ["from pydantic import model_validator"],
-    ("api.py", "Literal"): ["from typing import Literal"],
-    ("api.py", "Optional"): ["from typing import Optional"],
-    # And the names the app is built with
-    ("api.py", "FastAPI"): ["from fastapi import FastAPI"],
-    ("api.py", "Query"): ["from fastapi import Query"],
-    ("api.py", "Response"): ["from fastapi import Response"],
-    ("api.py", "CORSMiddleware"): ["from fastapi.middleware.cors import CORSMiddleware"],
-    ("api.py", "lifespan"): [
-        "@asynccontextmanager\nasync def lifespan(app: FastAPI):\n"
-        "    try:\n        yield\n    finally:\n        stop_workers()"
-    ],
-}
-
-
-def check_wiring(dashboard: Path, commit: str):
-    trees = {
-        path: ast.parse(git_show(dashboard, commit, f"src/uk_budget_data/{path}"))
-        for path in {path for path, _ in WIRING}
-    }
-    for (path, name), expected in WIRING.items():
-        found = bindings(trees[path], name)
-        assert found == expected, f"{path} binds {name} differently now: {found!r}"
-    # measure_ids() leaves the combined reform out by its id
-    combined = [
-        ast.unparse(keyword.value)
-        for node in ast.walk(function(trees["reforms.py"], "_create_combined_autumn_budget_reform"))
-        if isinstance(node, ast.Call)
-        for keyword in node.keywords
-        if keyword.arg == "id"
-    ]
-    assert combined == ["AUTUMN_BUDGET_2026_COMBINED_ID"], f"The combined reform's id is {combined}"
-    # The app: how api.py builds it, its middleware, its exception handlers,
-    # its routes, and the household impact endpoint's parameters
-    found = app_wiring(trees["api.py"])
-    assert found == APP_WIRING, f"api.py builds or changes app differently now: {found!r}"
-
-
-# Keywords that only document an API (its OpenAPI page), not what it accepts
-DOCUMENTATION = {
-    "title", "description", "summary", "version", "examples", "openapi_examples", "deprecated",
-    "include_in_schema", "contact", "license_info", "openapi_tags", "tags", "response_description",
-}
-HOUSEHOLD_ROUTE = "app.post('/api/household-impact')"
-
-
-class Undocumented(ast.NodeTransformer):
-    def visit_Call(self, node):
-        self.generic_visit(node)
-        node.keywords = [keyword for keyword in node.keywords if keyword.arg not in DOCUMENTATION]
-        return node
-
-
-def names_app(node: ast.AST) -> bool:
-    return any(isinstance(child, ast.Name) and child.id == "app" for child in ast.walk(node))
-
-
-def app_wiring(api: ast.Module) -> list[str]:
-    """How api.py builds and changes ``app``, as ``ast.unparse`` gives it
-    without documentation keywords: each top-level statement that names
-    ``app`` (``app = FastAPI(...)``, ``app.add_middleware(...)``), each other
-    route by its decorators and name, the household impact route with its
-    whole signature, and a function whose body names ``app`` in full."""
-    found = []
-    for statement in api.body:
-        statement = Undocumented().visit(copy.deepcopy(statement))
-        if not isinstance(statement, DEFINITIONS):
-            if names_app(statement):
-                found.append(ast.unparse(statement))
-            continue
-        if any(names_app(node) for node in statement.body):
-            if ast.get_docstring(statement) is not None:
-                statement.body = statement.body[1:] or [ast.Pass()]
-            found.append(ast.unparse(statement))
-            continue
-        decorators = [decorator for decorator in statement.decorator_list if names_app(decorator)]
-        if not decorators:
-            continue
-        if HOUSEHOLD_ROUTE in map(ast.unparse, decorators):
-            statement.body = [ast.Expr(ast.Constant(...))]
-            found.append(ast.unparse(statement))
-        else:
-            found.append("".join(f"@{ast.unparse(decorator)}\n" for decorator in decorators) + statement.name)
-    return found
-
-
-# What app_wiring finds in api.py: the capture stops if any of it changes,
-# since the endpoint it serves the models from would then differ from the
-# API's (a body embedded under a key, a required query, an exception handler
-# or middleware that answers in place of the 422, another route for the path)
-APP_WIRING = [
-    "app = FastAPI(lifespan=lifespan)",
-    "app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], "
-    "allow_headers=['*'])",
-    "@app.post('/api/personal-impact')\ncalculate_personal_impact",
-    "@app.post('/api/personal-impact/stream')\ncalculate_personal_impact_stream",
-    "@app.post('/api/household-impact')\n"
-    "async def calculate_household_impact(data: HouseholdImpactRequest, response: Response, "
-    "definition: list[str]=Query(default=[])):\n    ...",
-    "@app.get('/api/health')\nhealth_check",
-    "@app.get('/api/version')\nversion",
-    "def main():\n"
-    "    import uvicorn\n"
-    "    port = int(os.environ.get('PORT', 5001))\n"
-    "    print(f'Starting UK Budget Personal Impact API on port {port}...')\n"
-    "    uvicorn.run(app, host='0.0.0.0', port=port)",
-]
-
-
-def measure_ids(dashboard: Path, commit: str) -> list[str]:
-    """The ids of ``_MEASURE_FACTORIES``' reforms, in order: what
-    ``household_impact.measure_ids()`` returns (every single measure)."""
-    tree = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/reforms.py"))
-    bound_once(tree, "reforms.py", "_MEASURE_FACTORIES")
-    assigned = module_assignments(tree)
-    constants = {
-        name: value.value
-        for name, value in assigned.items()
-        if isinstance(value, ast.Constant) and isinstance(value.value, str)
-    }
-    factories = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
-    ids = []
-    for factory in assigned["_MEASURE_FACTORIES"].elts:
-        bound_once(tree, "reforms.py", factory.id)
-        reform_ids = [
-            keyword.value
-            for node in ast.walk(factories[factory.id])
-            if isinstance(node, ast.Call)
-            for keyword in node.keywords
-            if keyword.arg == "id"
-        ]
-        assert len(reform_ids) == 1, factory.id
-        value = reform_ids[0]
-        if isinstance(value, ast.Name):
-            bound_once(tree, "reforms.py", value.id)
-        ids.append(constants[value.id] if isinstance(value, ast.Name) else ast.literal_eval(value))
-    return ids
-
-
-def request_models(dashboard: Path, commit: str, household_impact: SimpleNamespace, policy_years: list[int]):
-    source = git_show(dashboard, commit, "src/uk_budget_data/api.py")
-    tree = ast.parse(source)
-    # The classes are run once, as written, with MAX_AMOUNT's one value; the
-    # names they take from pydantic and typing are checked in WIRING
-    bound_once(tree, "api.py", "MAX_AMOUNT", *MODELS)
-    assigned = module_assignments(tree)
-    namespace = {
-        "BaseModel": BaseModel,
-        "Field": Field,
-        "Literal": Literal,
-        "Optional": Optional,
-        "field_validator": field_validator,
-        "model_validator": model_validator,
-        "household_impact": household_impact,
-        "MAX_AMOUNT": ast.literal_eval(assigned["MAX_AMOUNT"]),
-        "POLICY_YEARS": policy_years,
-    }
-    classes = {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
-    for name in MODELS:
-        exec(compile(ast.Module(body=[classes[name]], type_ignores=[]), f"api.py:{name}", "exec"), namespace)
-    # The mirror copies these validators' rules by hand; another validator
-    # must be copied too before the capture is trusted, and their code is
-    # kept in the fixture, so apiMirror.test.ts sees a change to one
-    for name in MODELS:
-        decorators = namespace[name].__pydantic_decorators__
-        found = {
-            kind: sorted(getattr(decorators, kind))
-            for kind in ("validators", "field_validators", "root_validators", "field_serializers",
-                         "model_serializers", "model_validators", "computed_fields")
-            if getattr(decorators, kind)
-        }
-        assert found == VALIDATORS.get(name, {}), f"{name} has validators {found}"
-    validators = {
-        node.name: ast.unparse(node)
-        for node in classes["HouseholdImpactRequest"].body
-        if isinstance(node, ast.FunctionDef) and node.decorator_list
-    }
-    return namespace["HouseholdImpactRequest"], validators
-
-
-VALIDATORS = {
-    "HouseholdImpactRequest": {
-        "field_validators": ["_known_measures", "_policy_year", "_salary_year"],
-        "model_validators": ["_salary_not_after_year"],
-    },
-}
 
 # The JSON schema's keywords that say what a value may be
 SCHEMA_KEYWORDS = {
@@ -498,6 +322,32 @@ def validation_schema(node):
         else:
             assert key in ("title", "description"), f"Unexpected JSON schema keyword {key}"
     return kept
+
+
+def enum_of(schema: dict) -> list:
+    """The one enum of a property, which may also be null."""
+    enums = [option["enum"] for option in schema.get("anyOf", [schema]) if "enum" in option]
+    assert len(enums) == 1, schema
+    return enums[0]
+
+
+def schema_choices(schema: dict) -> dict:
+    """The choices the models accept, from their JSON schema."""
+    definitions = schema["$defs"]
+    answers = definitions["HouseholdAnswersRequest"]["properties"]
+    plans = enum_of(answers["student_loan_plan"])
+    assert enum_of(answers["partner_student_loan_plan"]) == plans
+    return {
+        "parts": enum_of(schema["properties"]["include"]["items"]),
+        "regions": enum_of(answers["region"]),
+        "tenures": enum_of(answers["tenure"]),
+        "student_loan_plans": plans,
+        "council_tax_bands": enum_of(answers["council_tax_band"]),
+        "brmas": enum_of(answers["brma"]),
+        "local_authorities": enum_of(answers["local_authority"]),
+        "oldest_child_age": definitions["HouseholdChildRequest"]["properties"]["age"]["maximum"],
+        "salary_year": answers["salary_year"]["default"],
+    }
 
 
 # --- Cases ---------------------------------------------------------------------
@@ -559,8 +409,9 @@ ANY = [
     " 1_0", "1_0 ", "1_0\t", "1._5", "1_.5", "+_1", "-_1", "1_e5", "1e_5", "i_nf", " i_nf", "n_an",
     "0__1", "0_0", "00__0", "0_", "0-1", "00-5", "-0_1", "-0-1", "1_0.0", "1_0.00", "1.0_0", "0.",
     "00.0", "0_.0", "+-1", "-+1", "--1", "++1", "-", "+", "+0",
-    # Unpaired surrogates, which JSON can carry and UTF-8 cannot
-    "\ud800", "2027\udc00",
+    # Unpaired surrogates, which JSON can carry and UTF-8 cannot, and a pair
+    # (one character once sent)
+    "\ud800", "2027\udc00", "\U0001f600",
     # Integers past 2**53 that fit an int64, as JavaScript writes them
     4611686018427388000, -4611686018427388000,
     [], [30], {}, {"value": 30},
@@ -575,6 +426,7 @@ BOOLEAN_TEXT = [
     "true", "false", "True", "FALSE", "yes", "no", "Yes", "y", "n", "on", "off", "On", "t", "f",
     "1", "0", " true", "true ", "2", "truthy", "",
 ]
+SURROGATE = "\ud800"
 
 
 def bounds_values(field_info):
@@ -606,15 +458,16 @@ def cases_for(model, base, choices):
 
     # The body
     add("the base body")
-    for value in [None, [], "x", 1, True, {}]:
+    for value in [None, [], "x", 1, True, {}, [SURROGATE]]:
         add(f"body = {json.dumps(value)}", body=value)
     for key in ["year", "policies", "household", "include"]:
         add(f"without {key}", remove=[[key]])
-    for key in ["unknown", "Year", *PROTOTYPE_KEYS, "\ud800"]:
+    for key in ["unknown", "Year", *PROTOTYPE_KEYS, SURROGATE]:
         add(f"{json.dumps(key)[1:-1]} at the top", set=[[[key], 0]])
+    add("unknown = a surrogate, at the top", set=[[["unknown"], SURROGATE]])
 
     # The year and the salary year
-    for year in [*choices["policy_years"], 2025, 2032, 0, "2027", " 2027", 2027.5, None, True, "x"]:
+    for year in [*choices["policy_years"], 2025, 2032, 0, "2027", " 2027", 2027.5, None, True, "x", [SURROGATE]]:
         add(f"year = {json.dumps(year)}", set=[[["year"], year]])
     for year in [2026, 2027, 2031]:
         for salary_year in [2025, 2026, 2027, 2031, 2032, "2026", 2026.5, None, True]:
@@ -629,15 +482,22 @@ def cases_for(model, base, choices):
     policies = [
         None, [], ids[:1], ids, ids[:1] * 2, ["a"], [ids[0], "a"], [1], [None], [True], ids[0], {},
         ["autumn_budget_2026_combined"], [ids[0].upper()], [ids[0] + " "],
+        # An unpaired surrogate in a measure id, alone and beside items
+        # refused for another reason, in either order
+        [SURROGATE], [ids[0], SURROGATE], [0, SURROGATE], [SURROGATE, 0], [SURROGATE, None], [SURROGATE, {}],
+        [SURROGATE, "a"], [SURROGATE, SURROGATE], {SURROGATE: 1}, {"a": SURROGATE},
     ]
     for value in policies:
         add(f"policies = {json.dumps(value)}", set=[[["policies"], value]])
     parts = list(choices["parts"])
-    for value in [None, [], parts, parts[:1], parts[::-1], parts * 2, ["x"], [None], [1], parts[0], {}, [parts[0].upper()]]:
+    for value in [
+        None, [], parts, parts[:1], parts[::-1], parts * 2, ["x"], [None], [1], parts[0], {}, [parts[0].upper()],
+        [SURROGATE], [parts[0], SURROGATE],
+    ]:
         add(f"include = {json.dumps(value)}", set=[[["include"], value]])
 
     # The household's fields
-    for value in [None, [], "x", 1, True]:
+    for value in [None, [], "x", 1, True, [SURROGATE]]:
         add(f"household = {json.dumps(value)}", set=[[["household"], value]])
     add("household = {}", set=[[["household"], {}]])
     literal_choices = {
@@ -656,8 +516,31 @@ def cases_for(model, base, choices):
         add(f"without household.{name}", set=[[["household", name], 0]], remove=[["household", name]])
         for value in field_values(name, field_info, literal_choices.get(name, ["x"])):
             add(f"household.{name} = {json.dumps(value)}", set=[[["household", name], value]])
-    for key in ["unknown", "Age", "partner", *PROTOTYPE_KEYS, "\ud800"]:
+    # Again with a partner, so code that reads a partner's answers only
+    # with a partner runs on each of them
+    partnered = [["household", "has_partner"], True]
+    for name, field_info in answers.model_fields.items():
+        if name not in ("children", "has_partner"):
+            for value in field_values(name, field_info, literal_choices.get(name, ["x"])):
+                add(f"with a partner, household.{name} = {json.dumps(value)}", set=[partnered, [["household", name], value]])
+    for key in ["unknown", "Age", "partner", *PROTOTYPE_KEYS, SURROGATE]:
         add(f"household.{json.dumps(key)[1:-1]}", set=[[["household", key], 0]])
+    # An unpaired surrogate beside another refusal, and in a key beside one
+    add("household: a surrogate region, a negative age", set=[[["household", "region"], SURROGATE], [["household", "age"], -1]])
+    add("household: a surrogate key, a negative age", set=[[["household", SURROGATE], 0], [["household", "age"], -1]])
+    add("a surrogate key, a year refused", set=[[[SURROGATE], 0], [["year"], 2025]])
+    add("household.unknown = a surrogate", set=[[["household", "unknown"], SURROGATE]])
+    add("household.region = an object with a surrogate key", set=[[["household", "region"], {SURROGATE: 1}]])
+    # The input of a missing field's error is the whole object it is missing from
+    add("without year, a surrogate beside a refused measure", set=[[["policies"], [0, SURROGATE]]], remove=[["year"]])
+    # A surrogate measure id stops the validation with a 500 at once: before
+    # or after the other errors, and the other refusals of the body?
+    unknown_measure = [["policies"], [SURROGATE]]
+    add("a surrogate measure, a year refused", set=[unknown_measure, [["year"], 2025]])
+    add("a surrogate measure, an unknown key", set=[unknown_measure, [["unknown"], 0]])
+    add("a surrogate measure, a surrogate key", set=[unknown_measure, [[SURROGATE], 0]])
+    add("a surrogate measure, a negative age", set=[unknown_measure, [["household", "age"], -1]])
+    add("a surrogate measure, a surrogate part", set=[unknown_measure, [["include"], [SURROGATE]]])
 
     # Children
     child = {"age": 5}
@@ -667,6 +550,8 @@ def cases_for(model, base, choices):
         *[[{"age": 5, key: 1}] for key in PROTOTYPE_KEYS],
         [{"age": 5}] * 11 + [{"age": 30}],
         [{"age": 30}] * 11,
+        [{"age": 5, SURROGATE: 1}], [{"age": 30, SURROGATE: 1}], [{"age": 30}, {"age": 5, SURROGATE: 1}],
+        [{"age": SURROGATE}, {"age": 30}], [[SURROGATE]], {SURROGATE: 1}, [{"age": 5}] * 10 + [{"age": SURROGATE}],
     ]
     for value in children:
         add(f"household.children = {json.dumps(value)}", set=[[["household", "children"], value]])
@@ -703,25 +588,16 @@ def cases_for(model, base, choices):
     return cases
 
 
+# --- Verdicts ------------------------------------------------------------------
+
+
 def error_location(loc) -> str:
     return ".".join(str(part) for part in loc) or "(body)"
 
 
-def endpoint(model) -> TestClient:
-    """A FastAPI endpoint that takes the body as the model, as the dashboard's
-    does (``endpoint_body``), and accepts what it validates."""
-    app = FastAPI()
-
-    @app.post("/api/household-impact")
-    async def household_impact(data: model):  # type: ignore[valid-type]
-        return {}
-
-    return TestClient(app, raise_server_exceptions=False)
-
-
 def holds_lone_surrogate(value) -> bool:
     if isinstance(value, str):
-        return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+        return re.search(r"[\ud800-\udfff]", value) is not None
     if isinstance(value, list):
         return any(map(holds_lone_surrogate, value))
     if isinstance(value, dict):
@@ -729,105 +605,126 @@ def holds_lone_surrogate(value) -> bool:
     return False
 
 
-def verdict(client, model, body):
-    """The endpoint's verdict on the body, sent as JSON: accepted, or its
-    422's errors (FastAPI puts ``body`` first in each location), or a 500
-    (``(body): server_error``), which it gives a body holding an unpaired
-    surrogate."""
-    text = json.dumps(body, allow_nan=False)
-    response = client.post("/api/household-impact", content=text, headers={"content-type": "application/json"})
-    if response.status_code == 200:
-        found = {"accepted": True, "errors": []}
-    elif response.status_code == 500:
-        assert holds_lone_surrogate(body), f"500 for {text}"
-        found = {"accepted": False, "errors": ["(body): server_error"]}
-    else:
-        assert response.status_code == 422, f"{response.status_code} for {text}"
-        locations = [error["loc"] for error in response.json()["detail"]]
-        assert all(loc[0] == "body" for loc in locations), locations
-        found = {
-            "accepted": False,
-            "errors": sorted(
-                {f"{error_location(error['loc'][1:])}: {error['type']}" for error in response.json()["detail"]}
-            ),
-        }
-    # The models refuse what the endpoint refuses
-    try:
-        model.model_validate(json.loads(text))
-        accepted = True
-    except (ValidationError, UnicodeEncodeError):
-        accepted = False
-    assert accepted == found["accepted"], f"The endpoint and its model differ on {text}"
-    return found
+def reported(errors) -> list[str]:
+    """FastAPI's errors as ``location: type``, without the ``body`` it puts
+    first in each location."""
+    assert all(error["loc"][0] == "body" for error in errors), errors
+    return sorted({f"{error_location(error['loc'][1:])}: {error['type']}" for error in errors})
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--dashboard", type=Path, required=True)
-    parser.add_argument("--commit", required=True)
-    parser.add_argument("--policyengine-uk", type=Path, required=True)
-    args = parser.parse_args()
-    dashboard = args.dashboard.expanduser()
-    uk = args.policyengine_uk.expanduser()
-    commit = resolve_commit(dashboard, args.commit)
+class Api:
+    """The dashboard's app, with its calculation replaced by one that
+    counts its calls; open, its lifespan has started, as in the server."""
 
-    locked = locked_versions(dashboard, commit)
-    for package, version in RUNNING.items():
-        assert locked.get(package) == version, (
-            f"{package} {version} is running, but the dashboard's uv.lock pins {locked.get(package)}"
+    def __init__(self, api, household_impact):
+        from fastapi.testclient import TestClient
+
+        self.api = api
+        self.calls = 0
+
+        def calculate(*args, **kwargs):
+            self.calls += 1
+            return {}
+
+        household_impact.calculate_household_impact = calculate
+        self.client = TestClient(api.app)
+
+    def __enter__(self):
+        self.client.__enter__()
+        return self
+
+    def __exit__(self, *exception):
+        self.client.__exit__(*exception)
+
+    def verdict(self, body) -> dict:
+        """The API's verdict on the body, sent as JSON: accepted, or the
+        errors FastAPI reports. A 422 whose errors hold an unpaired
+        surrogate cannot be written as UTF-8, so the API answers 500
+        instead; so it does when a validator's message holds one, which
+        pydantic-core raises on before it reports anything."""
+        from fastapi.exceptions import RequestValidationError
+
+        text = json.dumps(body, allow_nan=False)
+        # Answers are kept by request: a repeated one would not reach the
+        # calculation
+        self.api._cached_household_impact.cache_clear()
+        calls = self.calls
+        try:
+            response = self.client.post(ROUTE, content=text, headers={"content-type": "application/json"})
+        except UnicodeEncodeError as error:
+            assert holds_lone_surrogate(body) and self.calls == calls, text
+            if isinstance(error.__context__, RequestValidationError):
+                return {"accepted": False, "errors": reported(error.__context__.errors()), "status": 500}
+            return {"accepted": False, "errors": [], "status": 500}
+        if response.status_code == 200:
+            assert self.calls == calls + 1, f"Accepted without reaching the calculation: {text}"
+            return {"accepted": True, "errors": []}
+        assert self.calls == calls, text
+        assert response.status_code == 422, (
+            f"{response.status_code} for {text}: {response.text[:300]}. The mirror covers FastAPI's validation only"
         )
-    uk_version = locked["policyengine-uk"]
-    budget_years = json.loads(git_show(dashboard, commit, "src/uk_budget_data/budget_years.json"))
-    policy_years = budget_years["policy_years"]
-    ids = measure_ids(dashboard, commit)
-    household_impact = household_impact_choices(dashboard, commit, uk, uk_version)
-    household_impact.measure_ids = lambda: list(ids)
-    # Named only in the return annotation of HouseholdAnswersRequest.answers(),
-    # which validation does not call
-    household_impact.HouseholdAnswers = household_impact.Child = object
-    check_wiring(dashboard, commit)
-    model, validators = request_models(dashboard, commit, household_impact, policy_years)
+        return {"accepted": False, "errors": reported(response.json()["detail"])}
 
-    choices = {
-        "policy_years": policy_years,
-        "measure_ids": ids,
-        "parts": list(household_impact.PARTS),
-        "regions": list(household_impact.REGIONS),
-        "tenures": list(household_impact.TENURES),
-        "student_loan_plans": list(household_impact.STUDENT_LOAN_PLANS),
-        "council_tax_bands": list(household_impact.COUNCIL_TAX_BANDS),
-        "brmas": list(household_impact.BRMAS),
-        "local_authorities": list(household_impact.LOCAL_AUTHORITIES),
-        "oldest_child_age": household_impact.OLDEST_CHILD_AGE,
-        "salary_year": household_impact.SALARY_YEAR,
-    }
+
+def capture(dashboard: Path, commit: str, source: Path, out: Path):
+    check_source(dashboard, commit, source)
+    versions = check_environment(dashboard, commit)
+    import uk_budget_data
+    from fastapi.routing import APIRoute
+    from uk_budget_data import api, household_impact
+
+    package = (source / "src" / "uk_budget_data" / "__init__.py").resolve()
+    assert Path(uk_budget_data.__file__).resolve() == package, f"uk_budget_data is not {source}'s"
+
+    routes = [route for route in api.app.routes if isinstance(route, APIRoute) and route.path == ROUTE]
+    assert len(routes) == 1 and routes[0].methods == {"POST"}, routes
+    (body,) = routes[0].dependant.body_params
+    model = body.field_info.annotation
+    schema = validation_schema(model.model_json_schema())
+    features, functions, models = core_schema_features(model.__pydantic_core_schema__)
+    validators, namespace, validator_functions = validator_code(models, functions)
+
+    # What the validators read, as they read it: the policy years and the
+    # measures (the mirror copies their code, so the names they read are
+    # the ones recorded here)
+    def read():
+        return {
+            "policy_years": list(namespace["POLICY_YEARS"]),
+            "measure_ids": list(namespace["household_impact"].measure_ids()),
+        }
+
+    choices = {**read(), **schema_choices(schema)}
     base = copy.deepcopy(DASHBOARD_REQUESTS["defaults"])
-    base["policies"] = ids[:2]
-    base["include"] = list(household_impact.PARTS)
+    base["policies"] = choices["measure_ids"][:2]
+    base["include"] = list(choices["parts"])
     base["household"]["children"] = [{"age": 4}, {"age": 17, "in_education": True}]
-    client = endpoint(model)
-    cases = []
-    for case in cases_for(model, base, choices):
-        case = json_number(case)
-        cases.append({**case, **verdict(client, model, apply(base, case))})
-    assert verdict(client, model, base)["accepted"], "The base body must be one the API accepts"
+
+    with DashboardCode(source / "src", skip=validator_functions) as ran, Api(api, household_impact) as client:
+        assert client.verdict(base)["accepted"], "The base body must be one the API accepts"
+        cases = []
+        for case in cases_for(model, base, choices):
+            case = json_number(case)
+            cases.append({**case, **client.verdict(apply(base, case))})
+    assert {name: choices[name] for name in ("policy_years", "measure_ids")} == read(), "The choices changed"
+    code = ran.record()
 
     header = {
         "_note": (
-            "What the Autumn Budget 2026 dashboard's household impact API accepts: its request models "
-            "served from a FastAPI endpoint, posted each case. Written by capture_household_impact_api.py; "
-            "regenerate with it rather than editing by hand."
+            "What the Autumn Budget 2026 dashboard's household impact API accepts: its own app, run at the "
+            "commit with its calculation replaced, posted each case. Written by "
+            "capture_household_impact_api.py; regenerate with it rather than editing by hand."
         ),
         "source": {
             "dashboard": "PolicyEngine/uk-autumn-budget-dashboard-2026",
             "commit": commit,
-            "policyengine_uk": uk_version,
-            **{package.replace("-", "_"): version for package, version in RUNNING.items()},
+            **{package.replace("-", "_"): version for package, version in versions.items()},
             "seed": SEED,
         },
         "choices": {name: json.dumps(value, ensure_ascii=False) for name, value in choices.items()},
-        "schema": json.dumps(validation_schema(model.model_json_schema()), ensure_ascii=False),
+        "schema": json.dumps(schema, ensure_ascii=False),
         "validators": json.dumps(validators, ensure_ascii=False),
+        "features": json.dumps(features, ensure_ascii=False),
+        "code": json.dumps(code, ensure_ascii=False),
         "base": json.dumps(base, ensure_ascii=False),
     }
     # One choice list and one case a line, so a recapture's diff reads
@@ -836,16 +733,42 @@ def main():
     lines.append(' "choices": {')
     lines += [f'  "{name}": {value},' for name, value in header["choices"].items()]
     lines[-1] = lines[-1].rstrip(",")
-    lines += [" },", f' "schema": {header["schema"]},', f' "validators": {header["validators"]},']
-    lines += [f' "base": {header["base"]},', ' "cases": [']
+    lines.append(" },")
+    lines += [f' "{key}": {header[key]},' for key in ("schema", "validators", "features", "code", "base")]
+    lines.append(' "cases": [')
     # ASCII, so an unpaired surrogate is written as its escape
     lines += [f"  {json.dumps(case)}," for case in cases]
     lines[-1] = lines[-1].rstrip(",")
     lines += [" ]", "}"]
-    OUT.write_text("\n".join(lines) + "\n")
-    assert json.loads(OUT.read_text())["cases"] == cases
+    out.write_text("\n".join(lines) + "\n")
+    assert json.loads(out.read_text())["cases"] == cases
     accepted = sum(case["accepted"] for case in cases)
-    print(f"Wrote {OUT.name}: {len(cases)} cases, {accepted} accepted")
+    print(f"Wrote {out.name}: {len(cases)} cases, {accepted} accepted")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--dashboard", type=Path, required=True, help="a clone of the dashboard")
+    parser.add_argument("--commit", required=True, help="the dashboard commit to capture")
+    parser.add_argument("--source", type=Path, help="an export of the commit made before")
+    parser.add_argument("--python", help="the interpreter of an environment synced to the export's uv.lock")
+    parser.add_argument("--output", type=Path, default=OUT, help="where to write the fixture")
+    parser.add_argument("--inner", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    dashboard = args.dashboard.expanduser().resolve()
+    commit = resolve_commit(dashboard, args.commit)
+    out = args.output.expanduser().resolve()
+    if args.inner:
+        return capture(dashboard, commit, args.source, out)
+
+    with tempfile.TemporaryDirectory() as temporary:
+        source = args.source.expanduser().resolve() if args.source else Path(temporary)
+        if not args.source:
+            export(dashboard, commit, source)
+        python = [args.python] if args.python else ["uv", "run", "--frozen", "--exact", "--project", str(source), "python"]
+        inner = [__file__, "--inner", "--dashboard", str(dashboard), "--commit", commit, "--source", str(source)]
+        inner += ["--output", str(out)]
+        sys.exit(subprocess.run([*python, "-B", *inner]).returncode)
 
 
 if __name__ == "__main__":

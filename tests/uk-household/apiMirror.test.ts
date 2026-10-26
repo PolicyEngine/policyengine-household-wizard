@@ -1,14 +1,22 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import households from '../fixtures/uk/dashboard-households.json' with { type: 'json' };
-import { API, MIRRORED_VALIDATORS, apiRefusals, type ApiCase } from './reference/householdImpactApi';
+import {
+  API,
+  MIRRORED_FEATURES,
+  MIRRORED_VALIDATORS,
+  REVIEWED_DASHBOARD_CODE,
+  apiRefusals,
+  apiVerdict,
+  type ApiCase,
+} from './reference/householdImpactApi';
 
 /**
  * A differential test: reference/householdImpactApi.ts against the
- * dashboard's own request models, served from a FastAPI endpoint by
- * capture_household_impact_api.py. The mirror must give every captured case
- * the endpoint's verdict and the same errors, so the tests that lean on it
- * (requests the package builds are ones the API accepts) say what the API
- * does.
+ * dashboard's own app, which capture_household_impact_api.py runs at a
+ * commit and posts each case. The mirror must give every captured case the
+ * API's verdict, errors and status, so the tests that lean on it (requests
+ * the package builds are ones the API accepts) say what the API does.
  */
 
 const REQUESTS: Record<string, unknown> = Object.fromEntries(
@@ -40,17 +48,42 @@ describe('the household impact API mirror', () => {
     expect(apiRefusals(API.base)).toEqual([]);
   });
 
-  it('gives every captured case the API’s verdict and errors', () => {
+  it('gives every captured case the API’s verdict, errors and status', () => {
     const disagreements = API.cases.flatMap((apiCase) => {
-      const errors = [...new Set(apiRefusals(bodyFor(apiCase)))].sort();
-      const same = errors.length === 0 === apiCase.accepted && JSON.stringify(errors) === JSON.stringify(apiCase.errors);
-      return same ? [] : [{ name: apiCase.name, api: apiCase.errors, mirror: errors }];
+      const api = {
+        accepted: apiCase.accepted,
+        errors: apiCase.errors,
+        status: apiCase.status ?? (apiCase.accepted ? 200 : 422),
+      };
+      const mirror = apiVerdict(bodyFor(apiCase));
+      return JSON.stringify(mirror) === JSON.stringify(api) ? [] : [{ name: apiCase.name, api, mirror }];
     });
     expect(disagreements).toEqual([]);
   });
 
+  it('refuses with a reason whatever the API refuses', () => {
+    for (const apiCase of API.cases) expect(apiRefusals(bodyFor(apiCase)).length === 0).toBe(apiCase.accepted);
+  });
+
+  it('answers with a 500 only where the body holds an unpaired surrogate', () => {
+    const answered = API.cases.filter((apiCase) => apiCase.status === 500);
+    expect(answered.length).toBeGreaterThan(50);
+    // JSON.stringify escapes a surrogate only when it is unpaired
+    for (const apiCase of answered) expect(JSON.stringify(bodyFor(apiCase))).toMatch(/\\ud[89a-f]/);
+  });
+
   it('copies the validators the dashboard’s request model has now', () => {
     expect(API.validators).toEqual(MIRRORED_VALIDATORS);
+  });
+
+  it('has read all the dashboard code that runs while the API answers', () => {
+    const sha256 = (code: string) => createHash('sha256').update(code, 'utf8').digest('hex');
+    const ran = Object.fromEntries(Object.entries(API.code).map(([name, code]) => [name, sha256(code)]));
+    expect(ran).toEqual(REVIEWED_DASHBOARD_CODE);
+  });
+
+  it('implements every pydantic feature the models use', () => {
+    expect(API.features.filter((feature) => !MIRRORED_FEATURES.includes(feature))).toEqual([]);
   });
 
   it('reads the choices the dashboard’s request models name', () => {
