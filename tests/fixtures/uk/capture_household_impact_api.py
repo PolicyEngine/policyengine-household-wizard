@@ -3,9 +3,10 @@
 The Autumn Budget 2026 dashboard checks a ``POST /api/household-impact`` body
 with three pydantic models in its ``src/uk_budget_data/api.py``
 (``HouseholdChildRequest``, ``HouseholdAnswersRequest`` and
-``HouseholdImpactRequest``). This script reads those classes, and the choices
-they name, from git at the given commits, runs them under pydantic, and writes
-``household-impact-api.json`` next to it:
+``HouseholdImpactRequest``), which its FastAPI endpoint takes the body as.
+This script reads those classes, and the choices they name, from git at the
+given commits, serves them from a FastAPI endpoint of the same shape, and
+writes ``household-impact-api.json`` next to it:
 
 - ``choices``: the regions, tenures, student loan plans, Council Tax bands,
   Broad Rental Market Areas, local authorities, parts, policy years and
@@ -13,24 +14,27 @@ they name, from git at the given commits, runs them under pydantic, and writes
 - ``base`` and ``cases``: a valid body, and changes to it (one field set to
   each kind of value pydantic might take or refuse, children, unknown and
   prototype keys, the year rules, random combinations of these, and the
-  requests in ``dashboard-households.json``), each with pydantic's verdict:
-  accepted or not, and the location of each error.
+  requests in ``dashboard-households.json``), each with the endpoint's
+  verdict: accepted or not, and the location and type of each error in its
+  422.
 
 ``tests/uk-household/apiMirror.test.ts`` checks that
 ``reference/householdImpactApi.ts`` gives every case the same verdict.
 
 The classes are run on their own, with the choices they read from
 ``household_impact`` filled in, so neither policyengine-uk nor the dashboard
-needs installing. Run it from the wizard's root:
+needs installing. Run it from the wizard's root, with the pydantic,
+pydantic-core, FastAPI and Starlette versions the dashboard's ``uv.lock``
+pins at that commit (the script stops on any other):
 
     uv run --no-project --python 3.13 --with pydantic==2.12.5 \\
+      --with fastapi==0.122.0 --with starlette==0.50.0 --with httpx==0.28.1 \\
       tests/fixtures/uk/capture_household_impact_api.py \\
       --dashboard ~/PolicyEngine/uk-autumn-budget-dashboard-2026 \\
       --commit <dashboard commit> \\
-      --policyengine-uk ~/PolicyEngine/policyengine-uk --uk-version <tag>
+      --policyengine-uk ~/PolicyEngine/policyengine-uk
 
-Use the pydantic and policyengine-uk versions the dashboard's ``uv.lock``
-pins at that commit.
+It reads policyengine-uk at the version ``uv.lock`` pins (its git tag).
 """
 
 import argparse
@@ -39,11 +43,17 @@ import copy
 import json
 import random
 import subprocess
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal, Optional
 
+import fastapi
 import pydantic
+import pydantic_core
+import starlette
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 HERE = Path(__file__).resolve().parent
@@ -63,6 +73,21 @@ def resolve_commit(repo: Path, rev: str) -> str:
     return subprocess.run(
         ["git", "-C", str(repo), "rev-parse", f"{rev}^{{commit}}"], check=True, capture_output=True, text=True
     ).stdout.strip()
+
+
+# The packages that decide the verdicts, and the versions running here
+RUNNING = {
+    "pydantic": pydantic.VERSION,
+    "pydantic-core": pydantic_core.__version__,
+    "fastapi": fastapi.__version__,
+    "starlette": starlette.__version__,
+}
+
+
+def locked_versions(dashboard: Path, commit: str) -> dict[str, str]:
+    """The versions the dashboard's uv.lock pins at the commit."""
+    lock = tomllib.loads(git_show(dashboard, commit, "uv.lock"))
+    return {package["name"]: package["version"] for package in lock["package"] if "version" in package}
 
 
 def module_assignments(tree: ast.Module) -> dict[str, ast.expr]:
@@ -122,71 +147,164 @@ def household_impact_choices(dashboard: Path, commit: str, uk: Path, version: st
     return SimpleNamespace(**choices)
 
 
-def function_source(tree: ast.Module, name: str) -> str:
+DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def bound_names(statement: ast.stmt) -> set[str]:
+    """The module's names a top-level statement binds: what it assigns,
+    defines or imports, and what a function it defines declares ``global``."""
+    if isinstance(statement, DEFINITIONS):
+        return {statement.name} | {
+            name for node in ast.walk(statement) if isinstance(node, ast.Global) for name in node.names
+        }
+    names = set()
+    for node in ast.walk(statement):
+        if isinstance(node, DEFINITIONS):
+            names.add(node.name)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+    return names
+
+
+def bindings(tree: ast.Module, name: str) -> list[str]:
+    """Each top-level statement that binds ``name``, as ``ast.unparse`` gives
+    it: a function or class without its docstring, and an import as the one
+    name it brings in."""
+    found = []
+    for statement in tree.body:
+        if name not in bound_names(statement):
+            continue
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            source = (
+                f"from {'.' * statement.level}{statement.module or ''} import "
+                if isinstance(statement, ast.ImportFrom)
+                else "import "
+            )
+            found += [
+                source + alias.name + (f" as {alias.asname}" if alias.asname else "")
+                for alias in statement.names
+                if (alias.asname or alias.name).split(".")[0] == name
+            ]
+            continue
+        if isinstance(statement, DEFINITIONS) and ast.get_docstring(statement) is not None:
+            statement = copy.copy(statement)
+            statement.body = statement.body[1:] or [ast.Pass()]
+        found.append(ast.unparse(statement))
+    return found
+
+
+def function(tree: ast.Module, name: str) -> ast.FunctionDef:
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == name:
-            return ast.unparse(node)
+            return node
     raise SystemExit(f"No function {name}")
 
 
-# The code the choices are read through, as `ast.unparse` gives it: the
-# capture stops if any of it changes, since the reading would then be wrong
+GET_REFORMS = """\
+def _get_autumn_budget_2026_reforms() -> list[Reform]:
+    global _AUTUMN_BUDGET_2026_REFORMS_CACHE
+    if _AUTUMN_BUDGET_2026_REFORMS_CACHE is None:
+        members = [factory() for factory in _MEASURE_FACTORIES]
+        _AUTUMN_BUDGET_2026_REFORMS_CACHE = [_create_combined_autumn_budget_reform(members), *members]
+    return _AUTUMN_BUDGET_2026_REFORMS_CACHE"""
+
+# The names the choices and the models' rules are read through, by file, and
+# the statements that bind each (`bindings`). The capture stops if one changes
+# or another statement binds the name, since the reading would then be wrong.
 WIRING = {
-    "household_impact.measure_ids returns": (
-        "return [reform.id for reform in get_autumn_budget_2026_reforms() "
+    ("household_impact.py", "measure_ids"): [
+        "def measure_ids() -> list[str]:\n"
+        "    return [reform.id for reform in get_autumn_budget_2026_reforms() "
         "if reform.id != AUTUMN_BUDGET_2026_COMBINED_ID]"
-    ),
-    "reforms.get_autumn_budget_2026_reforms returns": "return _get_autumn_budget_2026_reforms()",
-    "reforms._get_autumn_budget_2026_reforms builds": "members = [factory() for factory in _MEASURE_FACTORIES]",
-    "budget_years._CONFIG": "_CONFIG = json.loads(files('uk_budget_data').joinpath('budget_years.json').read_text())",
-    "budget_years.POLICY_YEARS": "POLICY_YEARS = _CONFIG['policy_years']",
-    "api.py imports POLICY_YEARS": "uk_budget_data.budget_years.POLICY_YEARS",
-    "api.py imports household_impact": "uk_budget_data.household_impact",
+    ],
+    ("household_impact.py", "get_autumn_budget_2026_reforms"): [
+        "from uk_budget_data.reforms import get_autumn_budget_2026_reforms"
+    ],
+    ("household_impact.py", "AUTUMN_BUDGET_2026_COMBINED_ID"): [
+        "from uk_budget_data.reforms import AUTUMN_BUDGET_2026_COMBINED_ID"
+    ],
+    ("reforms.py", "get_autumn_budget_2026_reforms"): [
+        "def get_autumn_budget_2026_reforms() -> list[Reform]:\n    return _get_autumn_budget_2026_reforms()"
+    ],
+    ("reforms.py", "_get_autumn_budget_2026_reforms"): [GET_REFORMS],
+    ("reforms.py", "_AUTUMN_BUDGET_2026_REFORMS_CACHE"): [
+        "_AUTUMN_BUDGET_2026_REFORMS_CACHE: list[Reform] | None = None",
+        GET_REFORMS,
+    ],
+    ("reforms.py", "AUTUMN_BUDGET_2026_COMBINED_ID"): [
+        "AUTUMN_BUDGET_2026_COMBINED_ID = 'autumn_budget_2026_combined'"
+    ],
+    ("budget_years.py", "_CONFIG"): [
+        "_CONFIG = json.loads(files('uk_budget_data').joinpath('budget_years.json').read_text())"
+    ],
+    ("budget_years.py", "POLICY_YEARS"): ["POLICY_YEARS = _CONFIG['policy_years']"],
+    ("api.py", "POLICY_YEARS"): ["from uk_budget_data.budget_years import POLICY_YEARS"],
+    ("api.py", "household_impact"): ["from uk_budget_data import household_impact"],
 }
 
 
 def check_wiring(dashboard: Path, commit: str):
-    impact = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/household_impact.py"))
-    reforms = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/reforms.py"))
-    years = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/budget_years.py"))
-    api = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/api.py"))
-    found = {
-        "household_impact.measure_ids returns": function_source(impact, "measure_ids").splitlines()[-1].strip(),
-        "reforms.get_autumn_budget_2026_reforms returns": function_source(
-            reforms, "get_autumn_budget_2026_reforms"
-        ).splitlines()[-1].strip(),
-        "reforms._get_autumn_budget_2026_reforms builds": next(
-            line.strip()
-            for line in function_source(reforms, "_get_autumn_budget_2026_reforms").splitlines()
-            if "_MEASURE_FACTORIES" in line
-        ),
-        "budget_years._CONFIG": ast.unparse(module_statement(years, "_CONFIG")),
-        "budget_years.POLICY_YEARS": ast.unparse(module_statement(years, "POLICY_YEARS")),
+    trees = {
+        path: ast.parse(git_show(dashboard, commit, f"src/uk_budget_data/{path}"))
+        for path in {path for path, _ in WIRING}
     }
-    # What api.py's own names POLICY_YEARS and household_impact are bound to
-    imported = {
-        alias.asname or alias.name: f"{node.module}.{alias.name}"
+    for (path, name), expected in WIRING.items():
+        found = bindings(trees[path], name)
+        assert found == expected, f"{path} binds {name} differently now: {found!r}"
+    # measure_ids() leaves the combined reform out by its id
+    combined = [
+        ast.unparse(keyword.value)
+        for node in ast.walk(function(trees["reforms.py"], "_create_combined_autumn_budget_reform"))
+        if isinstance(node, ast.Call)
+        for keyword in node.keywords
+        if keyword.arg == "id"
+    ]
+    assert combined == ["AUTUMN_BUDGET_2026_COMBINED_ID"], f"The combined reform's id is {combined}"
+    # The endpoint takes the whole body as one HouseholdImpactRequest, and
+    # api.py sets no handler that would change its 422s
+    api = trees["api.py"]
+    assert endpoint_body(api) == ["data: HouseholdImpactRequest"], endpoint_body(api)
+    handlers = [
+        ast.unparse(node)
+        for node in ast.walk(api)
+        if isinstance(node, ast.Attribute) and node.attr in ("exception_handler", "add_exception_handler")
+    ]
+    assert not handlers, f"api.py sets exception handlers: {handlers}"
+
+
+def endpoint_body(api: ast.Module) -> list[str]:
+    """The parameters FastAPI reads from the body of api.py's household
+    impact endpoint: those that are not a ``Response`` or a ``Query``."""
+    routes = [
+        node
         for node in api.body
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
-    found["api.py imports POLICY_YEARS"] = imported.get("POLICY_YEARS")
-    found["api.py imports household_impact"] = imported.get("household_impact")
-    for name, expected in WIRING.items():
-        assert found[name] == expected, f"{name} changed: {found[name]!r}"
-
-
-def module_statement(tree: ast.Module, name: str) -> ast.stmt:
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
-            return node
-    raise SystemExit(f"No assignment to {name}")
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(ast.unparse(decorator) == "app.post('/api/household-impact')" for decorator in node.decorator_list)
+    ]
+    assert len(routes) == 1, f"{len(routes)} household impact endpoints"
+    arguments = routes[0].args
+    positional = arguments.posonlyargs + arguments.args
+    defaults = dict(zip([argument.arg for argument in positional][::-1], arguments.defaults[::-1]))
+    defaults.update(
+        (argument.arg, default) for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults) if default
+    )
+    body = []
+    for argument in positional + arguments.kwonlyargs:
+        annotation = ast.unparse(argument.annotation) if argument.annotation else ""
+        default = defaults.get(argument.arg)
+        if annotation == "Response" or (isinstance(default, ast.Call) and ast.unparse(default.func) == "Query"):
+            continue
+        body.append(f"{argument.arg}: {annotation}")
+    return body
 
 
 def measure_ids(dashboard: Path, commit: str) -> list[str]:
     """The ids of ``_MEASURE_FACTORIES``' reforms, in order: what
     ``household_impact.measure_ids()`` returns (every single measure)."""
     tree = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/reforms.py"))
+    assert len(bindings(tree, "_MEASURE_FACTORIES")) == 1, "_MEASURE_FACTORIES is bound more than once"
     assigned = module_assignments(tree)
     constants = {
         name: value.value
@@ -331,7 +449,21 @@ ANY = [
     "3__0", "_30", "30_", "1_000.5", ".5", "5.", "30.", "30.00", "3e1", "1e", "1e-3", "1.5e3",
     "-0", "0030", "0b11", "0o7", "+inf", "-nan", "INF", "Infinity ", "\u066130", "\uff13\uff10",
     "\t30\n", "\u00a030", "30\u2003", "\u221230", "\u001c30", "\u008530", "\ufeff30", "\u200b30",
+    # How pydantic-core reads underscores (once the text is trimmed, or
+    # untrimmed with them taken out, for a float), leading zeros (with
+    # underscores among them, or a minus sign after them for an int) and signs
+    " 1_0", "1_0 ", "1_0\t", "1._5", "1_.5", "+_1", "-_1", "1_e5", "1e_5", "i_nf", " i_nf", "n_an",
+    "0__1", "0_0", "00__0", "0_", "0-1", "00-5", "-0_1", "-0-1", "1_0.0", "1_0.00", "1.0_0", "0.",
+    "00.0", "0_.0", "+-1", "-+1", "--1", "++1", "-", "+", "+0",
+    # Integers past 2**53 that fit an int64, as JavaScript writes them
+    4611686018427388000, -4611686018427388000,
     [], [30], {}, {"value": 30},
+]
+# Integer text around jiter's limit of 4,300 characters for a run of digits
+# (with its minus sign), set on one integer and one float field
+LONG_NUMBER_TEXT = [
+    "1" * 4300, "1" * 4301, "-" + "1" * 4299, "-" + "1" * 4300, "+" + "1" * 4300, "+" + "1" * 4301,
+    " " + "1" * 4301, "1" * 4301 + " ", "1" * 4300 + ".0", "1" * 4301 + ".0", "1" * 4299 + "_11",
 ]
 BOOLEAN_TEXT = [
     "true", "false", "True", "FALSE", "yes", "no", "Yes", "y", "n", "on", "off", "On", "t", "f",
@@ -454,6 +586,11 @@ def cases_for(model, base, choices):
             changes[json.dumps(path)] = value
         add(f"combination {index + 1}", set=[[json.loads(path), value] for path, value in changes.items()])
 
+    # Long number text, after the combinations so they do not copy it
+    for path in [["year"], ["household", "employment_income"]]:
+        for value in LONG_NUMBER_TEXT:
+            add(f"{'.'.join(path)} = {value[:3]}… ({len(value)} characters)", set=[[path, value]])
+
     # The dashboard's own requests
     for name in DASHBOARD_REQUESTS:
         add(f"dashboard-households: {name}", fixture=name)
@@ -464,19 +601,43 @@ def error_location(loc) -> str:
     return ".".join(str(part) for part in loc) or "(body)"
 
 
-def verdict(model, body):
+def endpoint(model) -> TestClient:
+    """A FastAPI endpoint that takes the body as the model, as the dashboard's
+    does (``endpoint_body``), and accepts what it validates."""
+    app = FastAPI()
+
+    @app.post("/api/household-impact")
+    async def household_impact(data: model):  # type: ignore[valid-type]
+        return {}
+
+    return TestClient(app)
+
+
+def verdict(client, model, body):
+    """The endpoint's verdict on the body, sent as JSON: accepted, or its
+    422's errors (FastAPI puts ``body`` first in each location)."""
     text = json.dumps(body, allow_nan=False)
-    verdicts = []
-    for validate in (lambda: model.model_validate(json.loads(text)), lambda: model.model_validate_json(text)):
-        try:
-            validate()
-            verdicts.append({"accepted": True, "errors": []})
-        except ValidationError as error:
-            errors = sorted({f"{error_location(e['loc'])}: {e['type']}" for e in error.errors()})
-            verdicts.append({"accepted": False, "errors": errors})
-    if verdicts[0] != verdicts[1]:
-        raise SystemExit(f"pydantic's Python and JSON modes differ on {text}: {verdicts}")
-    return verdicts[0]
+    response = client.post("/api/household-impact", content=text, headers={"content-type": "application/json"})
+    if response.status_code == 200:
+        found = {"accepted": True, "errors": []}
+    else:
+        assert response.status_code == 422, f"{response.status_code} for {text}"
+        locations = [error["loc"] for error in response.json()["detail"]]
+        assert all(loc[0] == "body" for loc in locations), locations
+        found = {
+            "accepted": False,
+            "errors": sorted(
+                {f"{error_location(error['loc'][1:])}: {error['type']}" for error in response.json()["detail"]}
+            ),
+        }
+    # The models refuse what the endpoint refuses
+    try:
+        model.model_validate(json.loads(text))
+        accepted = True
+    except ValidationError:
+        accepted = False
+    assert accepted == found["accepted"], f"The endpoint and its model differ on {text}"
+    return found
 
 
 def main():
@@ -484,16 +645,21 @@ def main():
     parser.add_argument("--dashboard", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--policyengine-uk", type=Path, required=True)
-    parser.add_argument("--uk-version", required=True)
     args = parser.parse_args()
     dashboard = args.dashboard.expanduser()
     uk = args.policyengine_uk.expanduser()
     commit = resolve_commit(dashboard, args.commit)
 
+    locked = locked_versions(dashboard, commit)
+    for package, version in RUNNING.items():
+        assert locked.get(package) == version, (
+            f"{package} {version} is running, but the dashboard's uv.lock pins {locked.get(package)}"
+        )
+    uk_version = locked["policyengine-uk"]
     budget_years = json.loads(git_show(dashboard, commit, "src/uk_budget_data/budget_years.json"))
     policy_years = budget_years["policy_years"]
     ids = measure_ids(dashboard, commit)
-    household_impact = household_impact_choices(dashboard, commit, uk, args.uk_version)
+    household_impact = household_impact_choices(dashboard, commit, uk, uk_version)
     household_impact.measure_ids = lambda: list(ids)
     # Named only in the return annotation of HouseholdAnswersRequest.answers(),
     # which validation does not call
@@ -518,23 +684,24 @@ def main():
     base["policies"] = ids[:2]
     base["include"] = list(household_impact.PARTS)
     base["household"]["children"] = [{"age": 4}, {"age": 17, "in_education": True}]
+    client = endpoint(model)
     cases = []
     for case in cases_for(model, base, choices):
         case = json_number(case)
-        cases.append({**case, **verdict(model, apply(base, case))})
-    assert verdict(model, base)["accepted"], "The base body must be one the API accepts"
+        cases.append({**case, **verdict(client, model, apply(base, case))})
+    assert verdict(client, model, base)["accepted"], "The base body must be one the API accepts"
 
     header = {
         "_note": (
             "What the Autumn Budget 2026 dashboard's household impact API accepts: its request models "
-            "run under pydantic on each case. Written by capture_household_impact_api.py; regenerate "
-            "with it rather than editing by hand."
+            "served from a FastAPI endpoint, posted each case. Written by capture_household_impact_api.py; "
+            "regenerate with it rather than editing by hand."
         ),
         "source": {
             "dashboard": "PolicyEngine/uk-autumn-budget-dashboard-2026",
             "commit": commit,
-            "policyengine_uk": args.uk_version,
-            "pydantic": pydantic.VERSION,
+            "policyengine_uk": uk_version,
+            **{package.replace("-", "_"): version for package, version in RUNNING.items()},
             "seed": SEED,
         },
         "choices": {name: json.dumps(value, ensure_ascii=False) for name, value in choices.items()},

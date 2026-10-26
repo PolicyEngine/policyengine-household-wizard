@@ -25,10 +25,11 @@ import type { UKAdultDraft, UKChildDraft, UKHeadDraft, UKHouseholdDraft } from '
  * - `petrol`, `diesel`, `cc` (childcare a month): left out when 0; `elec`:
  *   left out for the default (`null`).
  *
- * `extras` are not written. A private pension or electricity left out
- * (`undefined`) comes back as 0 or `null`, which mean the same. Unknown codes
- * in a link are read as unanswered (a plan as `NONE`), and an amount that is
- * not a number keeps its blank value.
+ * `extras` are not written, nor is an age, year or amount that is not a
+ * finite number. A private pension or electricity left out (`undefined`)
+ * comes back as 0 or `null`, which mean the same. Unknown codes in a link
+ * are read as unanswered (a plan as `NONE`), and an amount that is not a
+ * number keeps its blank value.
  */
 
 type NumberKey<T> = { [K in keyof T]-?: T[K] extends number | null | undefined ? K : never }[keyof T];
@@ -50,15 +51,18 @@ const PLAN_TOKEN = 'l';
 
 const blank = createBlankDraft();
 
+// Only a finite number is written; anything else reads back blank
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
 // An age as written: empty when unanswered (or not a finite number)
-const writeAge = (age: unknown) => (typeof age === 'number' && Number.isFinite(age) ? String(age) : '');
+const writeAge = (age: unknown) => (isFiniteNumber(age) ? String(age) : '');
 
 function writeAdult(adult: UKAdultDraft, tokens: Array<[string, string]>): string {
   const record = adult as unknown as Record<string, unknown>;
   const segments = [writeAge(adult.age)];
   for (const [key, letter] of tokens) {
     const value = record[key];
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    if (!isFiniteNumber(value)) continue;
     // The State Pension's blank is null (the full rate), so its 0 is an answer
     if (value === 0 && key !== 'statePension') continue;
     segments.push(`${letter}${value}`);
@@ -93,9 +97,10 @@ function readAdult<T extends UKAdultDraft>(raw: string, base: T, tokens: Array<[
   return adult;
 }
 
-function writeChild(child: UKChildDraft): string {
-  const age = writeAge(child.age);
-  const education = child.inEducation === true ? 'y' : child.inEducation === false ? 'n' : '';
+// A missing child (a hole in the list) is written as an unanswered one
+function writeChild(child: UKChildDraft | undefined): string {
+  const age = writeAge(child?.age);
+  const education = child?.inEducation === true ? 'y' : child?.inEducation === false ? 'n' : '';
   return `${age}${education}`;
 }
 
@@ -115,10 +120,10 @@ const sameAdult = (a: UKAdultDraft, b: UKAdultDraft) =>
 
 export function serializeDraft(draft: UKHouseholdDraft): string {
   const params = new URLSearchParams();
-  params.set('sy', String(draft.salaryYear));
+  if (isFiniteNumber(draft.salaryYear)) params.set('sy', String(draft.salaryYear));
   if (draft.region) params.set('region', draft.region);
   if (draft.tenure) params.set('tenure', draft.tenure);
-  if (typeof draft.monthlyRent === 'number') params.set('rent', String(draft.monthlyRent));
+  if (isFiniteNumber(draft.monthlyRent)) params.set('rent', String(draft.monthlyRent));
   if (draft.councilTaxBand) params.set('band', draft.councilTaxBand);
   if (typeof draft.claimsUniversalCredit === 'boolean') params.set('uc', draft.claimsUniversalCredit ? '1' : '0');
 
@@ -131,13 +136,15 @@ export function serializeDraft(draft: UKHouseholdDraft): string {
   if (draft.hasPartner || !sameAdult(draft.partner, blank.partner)) {
     params.set('partner', writeAdult(draft.partner, ADULT_TOKENS));
   }
-  if (draft.children.length > 0) params.set('c', draft.children.map(writeChild).join(','));
+  if (draft.children.length > 0) params.set('c', Array.from(draft.children, writeChild).join(','));
 
   const { petrol, diesel, electricity } = draft.spending;
-  if (petrol) params.set('petrol', String(petrol));
-  if (diesel) params.set('diesel', String(diesel));
-  if (typeof electricity === 'number') params.set('elec', String(electricity));
-  if (draft.monthlyChildcare) params.set('cc', String(draft.monthlyChildcare));
+  if (isFiniteNumber(petrol) && petrol !== 0) params.set('petrol', String(petrol));
+  if (isFiniteNumber(diesel) && diesel !== 0) params.set('diesel', String(diesel));
+  if (isFiniteNumber(electricity)) params.set('elec', String(electricity));
+  if (isFiniteNumber(draft.monthlyChildcare) && draft.monthlyChildcare !== 0) {
+    params.set('cc', String(draft.monthlyChildcare));
+  }
   return params.toString();
 }
 

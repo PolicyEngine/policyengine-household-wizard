@@ -4,22 +4,24 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * What the dashboard's household impact API refuses, for tests: a mirror of
- * its request models (`HouseholdImpactRequest` and the models it holds in
+ * its `POST /api/household-impact` endpoint, which takes the body as one
+ * `HouseholdImpactRequest` (a model holding the others in
  * PolicyEngine/uk-autumn-budget-dashboard-2026's src/uk_budget_data/api.py).
  *
  * It reads the models' JSON schema and choices from
  * ../../fixtures/uk/household-impact-api.json, which
  * capture_household_impact_api.py writes from the dashboard's code, and
- * checks a body the way pydantic does: fields, types, bounds, null, unknown
- * keys, and pydantic's lax conversions (a number in text, true as 1, "yes"
- * as true). The models' four validators are copied below by hand; the
- * capture stops if one is added, removed or renamed, and apiMirror.test.ts
- * fails if one's code changes (`MIRRORED_VALIDATORS`). apiMirror.test.ts
- * also checks that every case in the fixture gets pydantic's own verdict
- * here.
+ * checks a body the way FastAPI and pydantic do: fields, types, bounds,
+ * null, unknown keys, and pydantic's lax conversions (a number in text, true
+ * as 1, "yes" as true). The models' four validators are copied below by
+ * hand; the capture stops if one is added, removed or renamed, and
+ * apiMirror.test.ts fails if one's code changes (`MIRRORED_VALIDATORS`).
+ * apiMirror.test.ts also checks that every case in the fixture gets the
+ * verdict and errors here that an endpoint taking these models gave it.
  *
- * Each refusal is pydantic's error: where (`household.children.0.age`, or
- * `(body)` for the whole body) and its type (`less_than_equal`).
+ * Each refusal is an error from the API's 422: where
+ * (`household.children.0.age`, or `(body)` for the whole body) and its type
+ * (`less_than_equal`).
  */
 
 type Schema = {
@@ -55,7 +57,16 @@ export interface ApiCase {
 }
 
 export interface ApiCapture {
-  source: { dashboard: string; commit: string; policyengine_uk: string; pydantic: string; seed: number };
+  source: {
+    dashboard: string;
+    commit: string;
+    policyengine_uk: string;
+    pydantic: string;
+    pydantic_core: string;
+    fastapi: string;
+    starlette: string;
+    seed: number;
+  };
   choices: {
     policy_years: number[];
     measure_ids: string[];
@@ -103,21 +114,80 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  */
 const isFloatText = (value: number) => /[.e]/.test(String(value));
 
-// The text pydantic reads as an int or a float, once trimmed: ASCII digits,
-// single underscores between them, a sign, and for an int only a fraction of
-// zeros; for a float, Python's float syntax and inf, infinity or nan
-const DIGITS = '[0-9](?:_?[0-9])*';
-const INT_TEXT = new RegExp(`^[+-]?${DIGITS}(?:\\.0+)?$`);
-const FLOAT_TEXT = new RegExp(`^[+-]?(?:${DIGITS}(?:\\.(?:${DIGITS})?)?|\\.${DIGITS})(?:[eE][+-]?${DIGITS})?$`);
-const FLOAT_WORD = /^([+-]?)(inf|infinity|nan)$/i;
+// How pydantic-core 2.41.5 reads text as a number (src/input/shared.rs:
+// str_as_int, clean_int_str, strip_leading_zeros, str_as_float and
+// strip_underscores), with jiter 0.11.1 reading the integers
+
+// A JSON integer, as jiter reads one. It reads at most 4,300 characters of
+// digits (with the minus sign); a longer run is out of range.
+const JSON_INT = /^-?(?:0|[1-9][0-9]*)$/;
+const JSON_INT_RUN = /^-?[1-9][0-9]*/;
+const INT_CHARACTERS = 4300;
+// What Rust's f64 parsing reads (inf, infinity and nan in any case)
+const RUST_FLOAT = /^[+-]?(?:inf|infinity|nan|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:e[+-]?[0-9]+)?)$/i;
 const TRUE_TEXT = new Set(['1', 'on', 't', 'true', 'y', 'yes']);
 const FALSE_TEXT = new Set(['0', 'off', 'f', 'false', 'n', 'no']);
-// pydantic trims Unicode's White_Space characters: JavaScript's \s, but for
+// Rust trims Unicode's White_Space characters: JavaScript's \s, but for
 // U+FEFF, and with U+0085
 const SPACE = '[\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
 const EDGE_SPACE = new RegExp(`^${SPACE}+|${SPACE}+$`, 'g');
 const trim = (text: string) => text.replace(EDGE_SPACE, '');
 const INT_LIMIT = 2 ** 63;
+
+// Underscores taken out, unless one starts or ends the text or two are
+// together; undefined when there are none
+function stripUnderscores(text: string): string | undefined {
+  if (!text.includes('_') || text.startsWith('_') || text.endsWith('_') || text.includes('__')) return undefined;
+  return text.replace(/_/g, '');
+}
+
+// Leading zeros taken out (and underscores among them), keeping one before a
+// point or when the number is zero; undefined when the text does not start
+// with a digit or a minus sign
+function stripLeadingZeros(text: string): string | undefined {
+  if (text[0] !== '0') return /^[1-9-]/.test(text) ? text : undefined;
+  for (let index = 1; index < text.length; index++) {
+    const character = text[index];
+    if (character === '0' || character === '_') continue;
+    if (/[1-9-]/.test(character)) return text.slice(index);
+    if (character === '.') return text.slice(index - 1);
+    return undefined;
+  }
+  return text.slice(-1);
+}
+
+// The text jiter reads again when it could not read it as it was: trimmed,
+// a leading + taken out, leading zeros taken out, a point followed only by
+// zeros taken out, and underscores taken out
+function cleanIntText(text: string): string | undefined {
+  let rest = trim(text);
+  if (rest.startsWith('+')) {
+    if (rest[1] === '-') return undefined;
+    rest = rest.slice(1);
+  }
+  let sign = '';
+  if (rest.startsWith('-')) {
+    if (rest[1] === '-' || rest[1] === '+') return undefined;
+    sign = '-';
+    rest = rest.slice(1);
+  }
+  const unpadded = stripLeadingZeros(rest);
+  if (unpadded === undefined) return undefined;
+  rest = unpadded;
+  const point = rest.indexOf('.');
+  if (point >= 0 && /^0+$/.test(rest.slice(point + 1))) rest = rest.slice(0, point);
+  return sign + (stripUnderscores(rest) ?? rest);
+}
+
+const floatOf = (text: string) => {
+  const word = /^([+-]?)(inf|infinity|nan)$/i.exec(text);
+  if (!word) return Number(text);
+  if (word[2].toLowerCase() === 'nan') return Number.NaN;
+  return word[1] === '-' ? -Infinity : Infinity;
+};
+
+// Rust's eq_ignore_ascii_case: only A to Z are folded
+const asciiLower = (text: string) => text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 
 class Check {
   readonly errors: string[] = [];
@@ -164,8 +234,13 @@ class Check {
       return Math.abs(value) >= INT_LIMIT ? this.fail(loc, 'int_parsing_size') : value;
     }
     if (typeof value === 'string') {
-      const text = trim(value);
-      return INT_TEXT.test(text) ? Number(text.replace(/_/g, '').replace(/\.0+$/, '')) : this.fail(loc, 'int_parsing');
+      // jiter reads the text as it is first: a run of digits too long for it
+      // is int_parsing_size, then; after cleaning, int_parsing
+      if ((JSON_INT_RUN.exec(value)?.[0].length ?? 0) > INT_CHARACTERS) return this.fail(loc, 'int_parsing_size');
+      const text = JSON_INT.test(value) ? value : cleanIntText(value);
+      return text !== undefined && JSON_INT.test(text) && text.length <= INT_CHARACTERS
+        ? Number(text)
+        : this.fail(loc, 'int_parsing');
     }
     return this.fail(loc, 'int_type');
   }
@@ -174,13 +249,12 @@ class Check {
     if (typeof value === 'boolean') return Number(value);
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
+      // The trimmed text, or else the text with its underscores taken out,
+      // untrimmed
       const text = trim(value);
-      const word = FLOAT_WORD.exec(text);
-      if (word) {
-        if (word[2].toLowerCase() === 'nan') return Number.NaN;
-        return word[1] === '-' ? -Infinity : Infinity;
-      }
-      return FLOAT_TEXT.test(text) ? Number(text.replace(/_/g, '')) : this.fail(loc, 'float_parsing');
+      if (RUST_FLOAT.test(text)) return floatOf(text);
+      const stripped = stripUnderscores(value);
+      return stripped !== undefined && RUST_FLOAT.test(stripped) ? floatOf(stripped) : this.fail(loc, 'float_parsing');
     }
     return this.fail(loc, 'float_type');
   }
@@ -202,7 +276,7 @@ class Check {
       return value === 0 || value === 1 ? value === 1 : this.fail(loc, 'bool_parsing');
     }
     if (typeof value === 'string') {
-      const text = value.toLowerCase();
+      const text = asciiLower(value);
       if (TRUE_TEXT.has(text)) return true;
       if (FALSE_TEXT.has(text)) return false;
       return this.fail(loc, 'bool_parsing');
@@ -221,8 +295,10 @@ class Check {
     return items;
   }
 
+  // FastAPI validates with from_attributes=True, under which pydantic names a
+  // value that is not an object model_attributes_type
   object(schema: Schema, value: unknown, loc: string): Result {
-    if (!isObject(value)) return this.fail(loc, 'model_type');
+    if (!isObject(value)) return this.fail(loc, 'model_attributes_type');
     const at = (key: string) => (loc ? `${loc}.${key}` : key);
     const before = this.errors.length;
     const properties = schema.properties ?? {};
@@ -287,8 +363,13 @@ export function apiRefusals(body: unknown): string[] {
   const request: unknown = body === undefined ? undefined : JSON.parse(JSON.stringify(body));
   const check = new Check();
   const properties = SCHEMA.properties!;
+  // FastAPI reads an empty body, and null, as no body
+  if (request === undefined || request === null) {
+    check.fail('', 'missing');
+    return check.errors;
+  }
   if (!isObject(request)) {
-    check.fail('', 'model_type');
+    check.fail('', 'model_attributes_type');
     return check.errors;
   }
   const field = (key: string) => (Object.hasOwn(request, key) ? check.value(properties[key], request[key], key) : undefined);

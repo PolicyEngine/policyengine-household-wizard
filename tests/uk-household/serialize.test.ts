@@ -91,6 +91,38 @@ describe('serializeDraft', () => {
     expect(round.spending).toEqual({ petrol: 1, diesel: 2, electricity: null });
   });
 
+  it('leaves out an age, year or amount that is not a finite number, so it reads back blank', () => {
+    const typical = createTypicalDraft();
+    const draft: UKHouseholdDraft = {
+      ...typical,
+      salaryYear: Number.NaN,
+      tenure: 'RENT_PRIVATELY',
+      monthlyRent: Number.NaN,
+      head: { ...typical.head, age: Infinity, employmentIncome: -Infinity },
+      children: [{ age: Number.NaN }],
+      monthlyChildcare: Infinity,
+      spending: { petrol: Infinity, diesel: Number.NaN, electricity: Number.NaN },
+    };
+    const link = serializeDraft(draft);
+    expect(link).not.toMatch(/NaN|Infinity/);
+    expect(new URLSearchParams(link).has('sy')).toBe(false);
+    const round = deserializeDraft(link);
+    expect(round.salaryYear).toBe(createBlankDraft().salaryYear);
+    expect(round.monthlyRent).toBeNull();
+    expect(round.head.age).toBeNull();
+    expect(round.children).toEqual([{ age: null }]);
+    expect(round.monthlyChildcare).toBe(0);
+    expect(round.spending).toEqual({ petrol: 0, diesel: 0, electricity: null });
+  });
+
+  it('writes a child missing from the list as an unanswered one', () => {
+    const children: UKHouseholdDraft['children'] = [];
+    children[1] = { age: 7, inEducation: false };
+    const link = serializeDraft({ ...createTypicalDraft(), children });
+    expect(new URLSearchParams(link).get('c')).toBe(',7n');
+    expect(deserializeDraft(link).children).toEqual([{ age: null }, { age: 7, inEducation: false }]);
+  });
+
   it('does not write extras', () => {
     const draft: UKHouseholdDraft = { ...createTypicalDraft(), extras: { secret: 'x' } };
     expect(serializeDraft(draft)).not.toContain('secret');

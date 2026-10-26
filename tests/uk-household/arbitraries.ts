@@ -74,6 +74,8 @@ export interface DraftArbOptions {
   childAges?: fc.Arbitrary<number | null>;
   salaryYears?: fc.Arbitrary<number>;
   maxChildren?: number;
+  /** Also children lists with holes (`children[1]` set before `children[0]`). */
+  sparseChildren?: boolean;
 }
 
 export const draftArb = ({
@@ -81,6 +83,7 @@ export const draftArb = ({
   childAges = age(0, 22),
   salaryYears = fc.integer({ min: 2025, max: 2032 }),
   maxChildren = 12,
+  sparseChildren = false,
 }: DraftArbOptions = {}): fc.Arbitrary<UKHouseholdDraft> =>
   fc.record({
     salaryYear: salaryYears,
@@ -88,7 +91,12 @@ export const draftArb = ({
     head: headArb(adultAges),
     hasPartner: fc.boolean(),
     partner: adultArb(adultAges),
-    children: fc.array(childArb(childAges), { maxLength: maxChildren }),
+    children: sparseChildren
+      ? fc.oneof(
+          { arbitrary: fc.array(childArb(childAges), { maxLength: maxChildren }), weight: 3 },
+          { arbitrary: fc.sparseArray(childArb(childAges), { maxLength: maxChildren }), weight: 1 },
+        )
+      : fc.array(childArb(childAges), { maxLength: maxChildren }),
     tenure: tenureArb,
     monthlyRent: fc.option(amount(120_000), { nil: null }),
     councilTaxBand: bandArb,

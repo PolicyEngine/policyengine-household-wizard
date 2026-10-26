@@ -2,10 +2,11 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { UK_CHILD_AGE_MESSAGE } from '@/uk-household/children';
 import { addChild, createBlankDraft, createTypicalDraft, setChildCount, updateHead, updatePartner } from '@/uk-household/draft';
-import type { UKHouseholdDraft } from '@/uk-household/types';
+import { toHouseholdImpactRequest } from '@/uk-household/adapters/householdImpactRequest';
+import type { UKChildDraft, UKHouseholdDraft } from '@/uk-household/types';
 import { UK_HOUSEHOLD_LIMITS, UK_POLICY_YEARS, isComplete, validate } from '@/uk-household/validate';
 import { draftArb, yearArb } from './arbitraries';
-import { POLICY_YEARS } from './reference/householdImpactApi';
+import { MEASURE_IDS, POLICY_YEARS, apiRefusals } from './reference/householdImpactApi';
 
 const options = { year: 2027 };
 const codes = (draft: UKHouseholdDraft, opts: Parameters<typeof validate>[1] = options) =>
@@ -125,6 +126,22 @@ describe('validate', () => {
       ['children[5].age.required', 'children[5].age'],
     ]);
     expect(result.issues[0].message).toBe(UK_CHILD_AGE_MESSAGE);
+  });
+
+  it('finds a child missing from the list: a hole, which the request would send as null, or null', () => {
+    // children[1] set before children[0] type-checks
+    const sparse: UKChildDraft[] = [];
+    sparse[1] = { age: 7 };
+    const draft = { ...createTypicalDraft(), children: sparse };
+    expect(validate(draft, options).issues.map((issue) => [issue.code, issue.path])).toEqual([
+      ['children[0].required', 'children[0]'],
+    ]);
+    const request = toHouseholdImpactRequest(draft, { year: 2027, policies: [MEASURE_IDS[0]] });
+    expect(JSON.stringify(request.household.children)).toBe('[null,{"age":7}]');
+    expect(apiRefusals(request)).toEqual(['household.children.0: model_attributes_type']);
+
+    const withNull = [{ age: 3 }, null] as unknown as UKChildDraft[];
+    expect(codes({ ...createTypicalDraft(), children: withNull })).toEqual(['children[1].required']);
   });
 
   it('checks a State Pension only as entered and at State Pension age in the year', () => {

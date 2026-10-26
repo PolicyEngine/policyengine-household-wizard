@@ -91,6 +91,6 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   `tests/fixtures/uk/capture_household_impact_api.py` (its docstring has the
   command): the API mirror, `reference/householdImpactApi.ts`, reads their
   schema from the fixture it writes, and `apiMirror.test.ts` checks the
-  mirror against pydantic's verdicts.
+  mirror against the verdicts of a FastAPI endpoint serving those models.
 - New country → mirror the structure of `src/us-household/` and
   `src/uk-household/` rather than mixing into either.

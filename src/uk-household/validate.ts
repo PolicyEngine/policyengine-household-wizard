@@ -1,7 +1,7 @@
 import { UK_CHILD_AGE_MESSAGE, UK_OLDEST_CHILD_AGE } from './children';
 import { isRenting, isUKCouncilTaxBand, isUKRegion, isUKStudentLoanPlan, isUKTenure } from './codes';
 import { atStatePensionAge, statePensionEntered, type UKStatePensionTable } from './statePension';
-import type { UKHouseholdDraft, ValidationIssue, ValidationResult } from './types';
+import type { UKChildDraft, UKHouseholdDraft, ValidationIssue, ValidationResult } from './types';
 
 /**
  * The bounds the Autumn Budget 2026 dashboard's household impact API puts on
@@ -151,14 +151,21 @@ export function validate(draft: UKHouseholdDraft, options: UKValidateOptions): V
   if (draft.children.length > limits.maxChildren) {
     add('children.tooMany', 'children', `At most ${limits.maxChildren} children can be entered.`);
   }
-  draft.children.forEach((child, index) => {
+  // By index, so a hole in the list (children[1] set before children[0]) is
+  // an issue: the request would send it as null, which the API refuses
+  for (let index = 0; index < draft.children.length; index++) {
+    const child: UKChildDraft | null | undefined = draft.children[index];
+    if (child === null || child === undefined) {
+      add(`children[${index}].required`, `children[${index}]`, `Child ${index + 1}'s details are missing.`);
+      continue;
+    }
     const path = `children[${index}].age`;
     const label = `Child ${index + 1}'s age`;
     if (child.age === null || child.age === undefined) add(`${path}.required`, path, `${label} is required.`);
     else if (!isWhole(child.age)) add(`${path}.notWhole`, path, `${label} must be a whole number of years.`);
     else if (child.age < limits.childAge.min) add(`${path}.negative`, path, `${label} cannot be negative.`);
     else if (child.age > limits.childAge.max) add(`${path}.tooOld`, path, UK_CHILD_AGE_MESSAGE);
-  });
+  }
 
   if (isRenting(draft.tenure)) {
     amount('monthlyRent', 'Rent', draft.monthlyRent, limits.maxMonthlyRent, { optional: true });

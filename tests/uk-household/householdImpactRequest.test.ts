@@ -250,13 +250,15 @@ describe('toHouseholdImpactRequest', () => {
 
   it('builds a request the API accepts from every draft validate() accepts', () => {
     // Drafts near the bounds, so many pass: ages either side of the API's,
-    // salaries for years either side of its policy years. The API's check is
-    // its whole request check: every field's type, bound and choice, and its
-    // year, salary year and measure validators (the mirror gives pydantic's
-    // verdict on every case apiMirror.test.ts holds)
+    // salaries for years either side of its policy years, and children lists
+    // with holes. The API's check is its whole request check: every field's
+    // type, bound and choice, and its year, salary year and measure
+    // validators (the mirror gives the API's verdict on every case
+    // apiMirror.test.ts holds)
     const near = draftArb({
       adultAges: fc.option(fc.integer({ min: 14, max: 102 }), { nil: null }),
       childAges: fc.option(fc.integer({ min: 0, max: 21 }), { nil: null }),
+      sparseChildren: true,
       salaryYears: fc.oneof(
         { arbitrary: fc.constant(2026), weight: 3 },
         { arbitrary: fc.constantFrom(2025, 2027, 2031, 2032), weight: 1 },
