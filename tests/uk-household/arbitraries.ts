@@ -28,6 +28,14 @@ export const amount = (max: number) =>
     fc.integer({ min: 0, max: max * 100 }).map((pennies) => pennies / 100),
   );
 
+/** An optional amount: a number, `null` or `undefined`, which mean the same. */
+const optionalAmount = (max: number) =>
+  fc.oneof(
+    { arbitrary: amount(max), weight: 8 },
+    { arbitrary: fc.constant(null), weight: 1 },
+    { arbitrary: fc.constant(undefined), weight: 1 },
+  );
+
 export const age = (min: number, max: number) => fc.option(fc.integer({ min, max }), { nil: null });
 
 export const regionArb = fc.option(fc.constantFrom(...UK_REGIONS.map((region) => region.code)), { nil: null });
@@ -39,7 +47,7 @@ export const adultArb = (ages = age(0, 110)): fc.Arbitrary<UKAdultDraft> =>
   fc.record({
     age: ages,
     employmentIncome: amount(600_000),
-    privatePensionIncome: amount(250_000),
+    privatePensionIncome: optionalAmount(250_000),
     statePension: fc.option(amount(30_000), { nil: null }),
   });
 
@@ -89,7 +97,7 @@ export const draftArb = ({
     spending: fc.record({
       petrol: amount(120_000),
       diesel: amount(120_000),
-      electricity: fc.option(amount(120_000), { nil: null }),
+      electricity: optionalAmount(120_000),
     }),
   });
 

@@ -38,3 +38,6 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Type-check a consumer of the build
+        run: bun run check:consumer-types

@@ -45,6 +45,7 @@
   ],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly && tsx scripts/emit-subpath-types.ts",
+    "check:consumer-types": "tsx scripts/check-consumer-types.ts",
     "test": "vitest run",
     "test:live": "POLICYENGINE_LIVE_API=1 vitest run tests/us-household/v1Payload.live.test.ts",
     "test:watch": "vitest",

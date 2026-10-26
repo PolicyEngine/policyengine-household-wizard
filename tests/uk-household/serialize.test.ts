@@ -51,13 +51,26 @@ describe('serializeDraft', () => {
     expect(round.partner).toEqual(draft.partner);
   });
 
-  it('round-trips every draft', () => {
+  it('round-trips every draft, reading a private pension or electricity left out as 0 or null', () => {
+    // A private pension of null or undefined is written as none and read as
+    // 0, and electricity left out is read as null: each means the same, and
+    // gives the same request (householdImpactRequest.test.ts)
+    const canonical = (draft: UKHouseholdDraft): UKHouseholdDraft => ({
+      ...draft,
+      head: { ...draft.head, privatePensionIncome: draft.head.privatePensionIncome ?? 0 },
+      partner: { ...draft.partner, privatePensionIncome: draft.partner.privatePensionIncome ?? 0 },
+      spending: { ...draft.spending, electricity: draft.spending.electricity ?? null },
+    });
+    let leftOut = 0;
     fc.assert(
       fc.property(draftArb(), (draft) => {
-        expect(deserializeDraft(serializeDraft(draft))).toEqual(draft);
+        if (draft.head.privatePensionIncome == null || draft.spending.electricity === undefined) leftOut += 1;
+        // toEqual: fast-check builds some records without a prototype
+        expect(deserializeDraft(serializeDraft(draft))).toEqual(canonical(draft));
       }),
       { numRuns: 1000 },
     );
+    expect(leftOut).toBeGreaterThan(0);
   });
 
   it('is idempotent, and reads a URLSearchParams as its text', () => {

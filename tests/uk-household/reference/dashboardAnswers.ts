@@ -1,10 +1,14 @@
 // @ts-nocheck
 /**
- * The Autumn Budget 2026 dashboard's form answers for a draft: a copy of
- * `answersFromDraft` in its src/utils/householdDraft.js, so the parity tests
- * can feed a draft to the dashboard's own request builder
- * (dashboardRequest.ts). The form takes salaries for 2026 only, so drafts
- * compared this way have `salaryYear` 2026.
+ * The Autumn Budget 2026 dashboard's form answers for a draft, so the parity
+ * tests can feed a draft to the dashboard's own request builder
+ * (dashboardRequest.ts). The keys are the answers its HouseholdCalculator.jsx
+ * held at cc15d50e, the ones that builder reads. This is not code from that
+ * commit: it was written for these tests, and is the same function as
+ * `answersFromDraft` in the dashboard's src/utils/householdDraft.js (added by
+ * PolicyEngine/uk-autumn-budget-dashboard-2026#172, whose tests check it
+ * against the form's answers both ways). The form takes salaries for 2026
+ * only, so drafts compared this way have `salaryYear` 2026.
  */
 export function answersFromDraft(draft) {
   return {

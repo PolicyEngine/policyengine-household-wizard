@@ -69,7 +69,7 @@ export {
   updatePartner,
 } from './draft';
 
-export { UK_HOUSEHOLD_LIMITS, isComplete, validate, type UKValidateOptions } from './validate';
+export { UK_HOUSEHOLD_LIMITS, UK_POLICY_YEARS, isComplete, validate, type UKValidateOptions } from './validate';
 export { deserializeDraft, serializeDraft } from './serialize';
 
 export * from './adapters';

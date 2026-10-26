@@ -21,13 +21,23 @@ export const UK_HOUSEHOLD_LIMITS = {
   maxStatePension: 100_000,
 } as const;
 
+/**
+ * The policy years the household impact API covers, 2026-27 to 2031-32
+ * (`POLICY_YEARS`, from the dashboard's src/uk_budget_data/budget_years.json).
+ * Salaries can be entered for these years too.
+ */
+export const UK_POLICY_YEARS: readonly number[] = [2026, 2027, 2028, 2029, 2030, 2031];
+
 export interface UKValidateOptions {
   /**
    * The policy year (2027 is 2027-28). Ages are taken in this year, State
    * Pension age is this year's, and salaries are grown to it.
    */
   year: number;
-  /** The policy years the calculation covers; left out, any year. */
+  /**
+   * The policy years the calculation covers, for the year and the salary
+   * year; left out, the household impact API's (`UK_POLICY_YEARS`).
+   */
   years?: readonly number[];
   /** State Pension ages by year; left out, `UK_STATE_PENSION`. */
   statePension?: UKStatePensionTable;
@@ -41,20 +51,21 @@ const pounds = (amount: number) => `£${amount.toLocaleString('en-GB')}`;
  * Check a draft for the calculation in `options.year`. Every issue is an
  * answer the calculation needs and lacks, or one the household impact API
  * would refuse, so a draft that passes builds a request within the API's
- * bounds (`UK_HOUSEHOLD_LIMITS`). An answer the calculation does not read
+ * bounds (`UK_HOUSEHOLD_LIMITS`) and years (`UK_POLICY_YEARS`), unless
+ * `options.years` names others. An answer the calculation does not read
  * (rent when not renting, a partner's answers without a partner, a State
  * Pension under State Pension age) is not checked.
  */
 export function validate(draft: UKHouseholdDraft, options: UKValidateOptions): ValidationResult {
-  const { year, years, statePension } = options;
+  const { year, years = UK_POLICY_YEARS, statePension } = options;
   const limits = UK_HOUSEHOLD_LIMITS;
   const issues: ValidationIssue[] = [];
   const add = (code: string, path: string, message: string) => issues.push({ code, path, message });
 
-  if (!isWhole(year) || (years && !years.includes(year))) {
+  if (!isWhole(year) || !years.includes(year)) {
     add('year.unsupported', 'year', `${String(year)} is not a year this calculation covers.`);
   }
-  if (!isWhole(draft.salaryYear) || (years && !years.includes(draft.salaryYear))) {
+  if (!isWhole(draft.salaryYear) || !years.includes(draft.salaryYear)) {
     add('salaryYear.unsupported', 'salaryYear', `Salaries cannot be entered for ${String(draft.salaryYear)}.`);
   } else if (isWhole(year) && draft.salaryYear > year) {
     add(

@@ -65,8 +65,10 @@ export interface UKAdultDraft {
 }
 
 /**
- * The household's head: the person answering ("you"). The household impact
- * API takes these fields for the head alone, so they are not on the partner.
+ * The household's head: the person answering ("you"). The dashboard's form
+ * asks these for the head only, so they are not on the partner (the
+ * household impact API also takes a partner's student loan plan; the request
+ * leaves it out, so the API's default, `NONE`, applies).
  */
 export interface UKHeadDraft extends UKAdultDraft {
   studentLoanPlan: UKStudentLoanPlan;

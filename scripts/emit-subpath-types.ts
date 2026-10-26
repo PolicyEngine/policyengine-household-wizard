@@ -16,10 +16,17 @@
  *
  * After this runs, both the flat-JS and folder-declarations layouts are
  * accessible under the same logical name.
+ *
+ * It then gives every relative import in the declarations its file
+ * (`'./draft'` becomes `'./draft.js'`, `'./adapters'` becomes
+ * `'./adapters/index.js'`). tsc keeps the sources' extensionless specifiers,
+ * which a consumer resolving with `moduleResolution: "NodeNext"` refuses
+ * (TS2834) because the package is ESM; bundler and node10 resolution read
+ * both spellings. `scripts/check-consumer-types.ts` checks the result.
  */
 import { existsSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +40,30 @@ const SHIMS = [
   { name: 'uk-household-adapters', folder: 'uk-household/adapters' },
 ];
 
+// A relative specifier in `from '…'`, `import '…'` or `import('…')`
+const RELATIVE_SPECIFIER = /(\bfrom\s+|\bimport\s+|\bimport\(\s*)(['"])(\.{1,2}\/[^'"]*)\2/g;
+
+/** The specifier with its file: `.js` for a module, `/index.js` for a folder. */
+function withFile(file: string, specifier: string): string {
+  if (/\.(js|json|css)$/.test(specifier)) return specifier;
+  const target = resolve(dirname(file), specifier);
+  if (existsSync(`${target}.d.ts`)) return `${specifier}.js`;
+  if (existsSync(join(target, 'index.d.ts'))) return `${specifier}/index.js`;
+  throw new Error(`${relative(DIST_ROOT, file)}: no declaration for '${specifier}'`);
+}
+
+async function declarationFiles(folder: string): Promise<string[]> {
+  const entries = await readdir(folder, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) return declarationFiles(path);
+      return Promise.resolve(entry.name.endsWith('.d.ts') ? [path] : []);
+    }),
+  );
+  return nested.flat();
+}
+
 async function main() {
   for (const { name, folder } of SHIMS) {
     const targetIndex = resolve(DIST_ROOT, folder, 'index.d.ts');
@@ -40,9 +71,23 @@ async function main() {
       throw new Error(`Missing declaration folder for ${name}: ${targetIndex}`);
     }
     const shimPath = resolve(DIST_ROOT, `${name}.d.ts`);
-    await writeFile(shimPath, `export * from './${folder}/index';\n`, 'utf8');
+    await writeFile(shimPath, `export * from './${folder}/index.js';\n`, 'utf8');
     console.log(`Wrote ${shimPath}`);
   }
+
+  let rewritten = 0;
+  for (const file of await declarationFiles(DIST_ROOT)) {
+    const text = await readFile(file, 'utf8');
+    const next = text.replace(
+      RELATIVE_SPECIFIER,
+      (_, before: string, quote: string, specifier: string) => `${before}${quote}${withFile(file, specifier)}${quote}`,
+    );
+    if (next !== text) {
+      await writeFile(file, next, 'utf8');
+      rewritten += 1;
+    }
+  }
+  console.log(`Gave relative imports their files in ${rewritten} declaration files`);
 }
 
 main().catch((error) => {

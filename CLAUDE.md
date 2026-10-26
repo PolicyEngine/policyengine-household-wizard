@@ -8,6 +8,7 @@ Shared wizard primitives and US and UK household draft contracts for PolicyEngin
 - Build: `bun run build`
 - Test: `bun run test`
 - Type check: `bun run typecheck`
+- Type-check an app that uses the build (after `bun run build`): `bun run check:consumer-types`
 - Refresh county data: `bun run regenerate-counties`
 - Refresh the PolicyEngine US variable graph: `bun run regenerate-variable-graph`
 - Check the V1 payload against the live API: `bun run test:live`
@@ -82,11 +83,14 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   `toHouseholdImpactRequest` together. The request must stay byte-identical
   to what the UK Autumn Budget 2026 dashboard sent: the fixtures in
   `tests/fixtures/uk/dashboard-households.json` were captured from its code,
-  and `tests/uk-household/reference/` is a verbatim copy of that code. Never
-  edit the reference to match the package; a new field needs fixtures
-  captured from the dashboard, and an intended difference needs its own test
-  and an entry in `docs/uk-household.md`. Keep
-  `tests/uk-household/reference/householdImpactApi.ts` in step with the
-  API's constraints.
+  and `tests/uk-household/reference/dashboardRequest.ts` is a verbatim copy
+  of that code. Never edit the reference to match the package; a new field
+  needs fixtures captured from the dashboard, and an intended difference
+  needs its own test and an entry in `docs/uk-household.md`. When the
+  dashboard's request models change, rerun
+  `tests/fixtures/uk/capture_household_impact_api.py` (its docstring has the
+  command): the API mirror, `reference/householdImpactApi.ts`, reads their
+  schema from the fixture it writes, and `apiMirror.test.ts` checks the
+  mirror against pydantic's verdicts.
 - New country → mirror the structure of `src/us-household/` and
   `src/uk-household/` rather than mixing into either.

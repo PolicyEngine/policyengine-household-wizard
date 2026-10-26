@@ -101,6 +101,6 @@ describe('toHouseholdImpactRequest against the dashboard', () => {
     const theirs = dashboard(draft, { year: 2027, policies: ['a'] });
     expect(ours.household.monthly_rent).toBe(1406);
     expect(theirs.household.monthly_rent).not.toBe(1406);
-    expect(apiRefusals(ours)).toContain('household.region: not one of the choices');
+    expect(apiRefusals(ours)).toContain('household.region: literal_error');
   });
 });

@@ -19,6 +19,7 @@ describe('uk-household exports', () => {
       'UK_AVERAGE_RENT',
       'UK_STATE_PENSION',
       'UK_HOUSEHOLD_LIMITS',
+      'UK_POLICY_YEARS',
       'UK_OLDEST_CHILD_AGE',
       'UK_YOUNG_PERSON_AGE',
       'UK_CHILD_AGE_MESSAGE',

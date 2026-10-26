@@ -1,120 +1,282 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /**
- * What the dashboard's household impact API refuses, transcribed from
- * `HouseholdImpactRequest` and `HouseholdAnswersRequest` in
- * PolicyEngine/uk-autumn-budget-dashboard-2026's src/uk_budget_data/api.py
- * (at cc15d50e9c01520e7d77dc5a70b17f3fc258f9b6): field types, bounds,
- * literal sets, the policy years and the salary year rule. pydantic reads a
- * JSON number with no fractional part as an int, refuses null for a
- * required field, and refuses unknown fields (`extra: forbid`). Measure ids
- * are not checked here (the API checks them against its registry).
+ * What the dashboard's household impact API refuses, for tests: a mirror of
+ * its request models (`HouseholdImpactRequest` and the models it holds in
+ * PolicyEngine/uk-autumn-budget-dashboard-2026's src/uk_budget_data/api.py).
+ *
+ * It reads the models' JSON schema and choices from
+ * ../../fixtures/uk/household-impact-api.json, which
+ * capture_household_impact_api.py writes from the dashboard's code, and
+ * checks a body the way pydantic does: fields, types, bounds, null, unknown
+ * keys, and pydantic's lax conversions (a number in text, true as 1, "yes"
+ * as true). The models' four validators are copied below by hand; the
+ * capture fails if they change. apiMirror.test.ts checks that every case in
+ * the fixture gets pydantic's own verdict here.
+ *
+ * Each refusal is pydantic's error: where (`household.children.0.age`, or
+ * `(body)` for the whole body) and its type (`less_than_equal`).
  */
-const POLICY_YEARS = [2026, 2027, 2028, 2029, 2030, 2031];
-const REGIONS = [
-  'NORTH_EAST', 'NORTH_WEST', 'YORKSHIRE', 'EAST_MIDLANDS', 'WEST_MIDLANDS', 'EAST_OF_ENGLAND',
-  'LONDON', 'SOUTH_EAST', 'SOUTH_WEST', 'WALES', 'SCOTLAND', 'NORTHERN_IRELAND',
-];
-const TENURES = ['OWNED_OUTRIGHT', 'OWNED_WITH_MORTGAGE', 'RENT_PRIVATELY', 'RENT_FROM_COUNCIL', 'RENT_FROM_HA'];
-const PLANS = ['NONE', 'PLAN_1', 'PLAN_2', 'PLAN_4', 'PLAN_5', 'POSTGRADUATE'];
-const BANDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-const MAX_AMOUNT = 10_000_000;
 
-type Field = { kind: 'int' | 'float' | 'bool' | 'literal'; min?: number; max?: number; values?: string[]; optional?: boolean };
-
-const HOUSEHOLD: Record<string, Field> = {
-  age: { kind: 'int', min: 16, max: 100 },
-  employment_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  student_loan_plan: { kind: 'literal', values: PLANS },
-  has_partner: { kind: 'bool' },
-  partner_age: { kind: 'int', min: 16, max: 100 },
-  partner_employment_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  partner_student_loan_plan: { kind: 'literal', values: PLANS },
-  region: { kind: 'literal', values: REGIONS },
-  claims_universal_credit: { kind: 'bool' },
-  tenure: { kind: 'literal', values: TENURES },
-  monthly_rent: { kind: 'float', min: 0, max: 100_000 },
-  council_tax: { kind: 'float', min: 0, max: 100_000, optional: true },
-  council_tax_band: { kind: 'literal', values: BANDS },
-  monthly_childcare: { kind: 'float', min: 0, max: 10_000 },
-  salary_year: { kind: 'int' },
-  dividend_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  savings_interest_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  property_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  private_pension_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  partner_private_pension_income: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  petrol_spending: { kind: 'float', min: 0, max: 100_000 },
-  diesel_spending: { kind: 'float', min: 0, max: 100_000 },
-  electricity_spending: { kind: 'float', min: 0, max: 100_000 },
-  salary_sacrifice_pension_contributions: { kind: 'float', min: 0, max: MAX_AMOUNT },
-  state_pension: { kind: 'float', min: 0, max: 100_000, optional: true },
-  partner_state_pension: { kind: 'float', min: 0, max: 100_000, optional: true },
+type Schema = {
+  $ref?: string;
+  $defs?: Record<string, Schema>;
+  additionalProperties?: boolean;
+  anyOf?: Schema[];
+  default?: unknown;
+  enum?: string[];
+  items?: Schema;
+  maxItems?: number;
+  maximum?: number;
+  minItems?: number;
+  minimum?: number;
+  properties?: Record<string, Schema>;
+  required?: string[];
+  type?: 'array' | 'boolean' | 'integer' | 'null' | 'number' | 'object' | 'string';
 };
 
-function fieldRefusal(name: string, field: Field, value: unknown): string | null {
-  if (value === null) return field.optional ? null : `${name}: null`;
-  switch (field.kind) {
-    case 'bool':
-      return typeof value === 'boolean' ? null : `${name}: not a boolean`;
-    case 'literal':
-      return typeof value === 'string' && field.values!.includes(value) ? null : `${name}: not one of the choices`;
-    case 'int':
-    case 'float': {
-      if (typeof value !== 'number' || !Number.isFinite(value)) return `${name}: not a number`;
-      if (field.kind === 'int' && !Number.isInteger(value)) return `${name}: not a whole number`;
-      if (field.min !== undefined && value < field.min) return `${name}: below ${field.min}`;
-      if (field.max !== undefined && value > field.max) return `${name}: above ${field.max}`;
-      return null;
+/** A change to the base body, and pydantic's verdict on the result. */
+export interface ApiCase {
+  name: string;
+  /** Paths given new values; `remove`: paths taken out. */
+  set?: Array<[Array<string | number>, unknown]>;
+  remove?: Array<Array<string | number>>;
+  /** The whole body instead. */
+  body?: unknown;
+  /** The request of this name in dashboard-households.json instead. */
+  fixture?: string;
+  accepted: boolean;
+  /** pydantic's errors, as `location: type`. */
+  errors: string[];
+}
+
+export interface ApiCapture {
+  source: { dashboard: string; commit: string; policyengine_uk: string; pydantic: string; seed: number };
+  choices: {
+    policy_years: number[];
+    measure_ids: string[];
+    parts: string[];
+    regions: string[];
+    tenures: string[];
+    student_loan_plans: string[];
+    council_tax_bands: string[];
+    brmas: string[];
+    local_authorities: string[];
+    oldest_child_age: number;
+    salary_year: number;
+  };
+  schema: Schema;
+  base: Record<string, unknown>;
+  cases: ApiCase[];
+}
+
+// Read rather than imported: TypeScript would infer a type for every case
+const FIXTURE = join(fileURLToPath(import.meta.url), '..', '..', '..', 'fixtures', 'uk', 'household-impact-api.json');
+export const API = JSON.parse(readFileSync(FIXTURE, 'utf8')) as ApiCapture;
+
+const SCHEMA = API.schema;
+const { choices } = API;
+export const POLICY_YEARS: readonly number[] = choices.policy_years;
+export const MEASURE_IDS: readonly string[] = choices.measure_ids;
+export const REGIONS: readonly string[] = choices.regions;
+export const TENURES: readonly string[] = choices.tenures;
+export const PLANS: readonly string[] = choices.student_loan_plans;
+export const BANDS: readonly string[] = choices.council_tax_bands;
+
+/** A value pydantic accepted, as it holds it, or `FAILED` after an error. */
+const FAILED = Symbol('failed');
+type Result = unknown;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Whether Python reads the number's JSON text as a float: JSON.stringify
+ * writes a fraction or an exponent only for a non-integer or a number of
+ * 1e21 or more.
+ */
+const isFloatText = (value: number) => /[.e]/.test(String(value));
+
+// The text pydantic reads as an int or a float, once trimmed: ASCII digits,
+// single underscores between them, a sign, and for an int only a fraction of
+// zeros; for a float, Python's float syntax and inf, infinity or nan
+const DIGITS = '[0-9](?:_?[0-9])*';
+const INT_TEXT = new RegExp(`^[+-]?${DIGITS}(?:\\.0+)?$`);
+const FLOAT_TEXT = new RegExp(`^[+-]?(?:${DIGITS}(?:\\.(?:${DIGITS})?)?|\\.${DIGITS})(?:[eE][+-]?${DIGITS})?$`);
+const FLOAT_WORD = /^([+-]?)(inf|infinity|nan)$/i;
+const TRUE_TEXT = new Set(['1', 'on', 't', 'true', 'y', 'yes']);
+const FALSE_TEXT = new Set(['0', 'off', 'f', 'false', 'n', 'no']);
+// pydantic trims Unicode's White_Space characters: JavaScript's \s, but for
+// U+FEFF, and with U+0085
+const SPACE = '[\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
+const EDGE_SPACE = new RegExp(`^${SPACE}+|${SPACE}+$`, 'g');
+const trim = (text: string) => text.replace(EDGE_SPACE, '');
+const INT_LIMIT = 2 ** 63;
+
+class Check {
+  readonly errors: string[] = [];
+
+  fail(loc: string, type: string): typeof FAILED {
+    this.errors.push(`${loc || '(body)'}: ${type}`);
+    return FAILED;
+  }
+
+  value(schema: Schema, value: unknown, loc: string): Result {
+    if (schema.$ref) return this.value(definition(schema.$ref), value, loc);
+    if (schema.anyOf) {
+      // Optional[X]: null, or what X takes
+      const [other, nullable, ...rest] = schema.anyOf;
+      if (nullable?.type !== 'null' || rest.length > 0) throw new Error(`Unmirrored anyOf at ${loc}`);
+      return value === null ? null : this.value(other, value, loc);
+    }
+    if (schema.enum) {
+      return typeof value === 'string' && schema.enum.includes(value) ? value : this.fail(loc, 'literal_error');
+    }
+    switch (schema.type) {
+      case 'integer':
+        return this.bounded(schema, this.integer(value, loc), loc);
+      case 'number':
+        return this.bounded(schema, this.float(value, loc), loc);
+      case 'boolean':
+        return this.boolean(value, loc);
+      case 'string':
+        return typeof value === 'string' ? value : this.fail(loc, 'string_type');
+      case 'array':
+        return this.array(schema, value, loc);
+      case 'object':
+        return this.object(schema, value, loc);
+      default:
+        throw new Error(`Unmirrored schema at ${loc}: ${JSON.stringify(schema)}`);
     }
   }
+
+  integer(value: unknown, loc: string): Result {
+    if (typeof value === 'boolean') return Number(value);
+    if (typeof value === 'number') {
+      if (!isFloatText(value)) return value;
+      if (!Number.isInteger(value)) return this.fail(loc, 'int_from_float');
+      return Math.abs(value) >= INT_LIMIT ? this.fail(loc, 'int_parsing_size') : value;
+    }
+    if (typeof value === 'string') {
+      const text = trim(value);
+      return INT_TEXT.test(text) ? Number(text.replace(/_/g, '').replace(/\.0+$/, '')) : this.fail(loc, 'int_parsing');
+    }
+    return this.fail(loc, 'int_type');
+  }
+
+  float(value: unknown, loc: string): Result {
+    if (typeof value === 'boolean') return Number(value);
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const text = trim(value);
+      const word = FLOAT_WORD.exec(text);
+      if (word) {
+        if (word[2].toLowerCase() === 'nan') return Number.NaN;
+        return word[1] === '-' ? -Infinity : Infinity;
+      }
+      return FLOAT_TEXT.test(text) ? Number(text.replace(/_/g, '')) : this.fail(loc, 'float_parsing');
+    }
+    return this.fail(loc, 'float_type');
+  }
+
+  // pydantic checks the upper bound first, so NaN fails it
+  bounded(schema: Schema, value: Result, loc: string): Result {
+    if (value === FAILED) return value;
+    const number = value as number;
+    if (schema.maximum !== undefined && !(number <= schema.maximum)) return this.fail(loc, 'less_than_equal');
+    if (schema.minimum !== undefined && !(number >= schema.minimum)) return this.fail(loc, 'greater_than_equal');
+    return number;
+  }
+
+  boolean(value: unknown, loc: string): Result {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') {
+      if (isFloatText(value)) return this.fail(loc, 'bool_type');
+      return value === 0 || value === 1 ? value === 1 : this.fail(loc, 'bool_parsing');
+    }
+    if (typeof value === 'string') {
+      const text = value.toLowerCase();
+      if (TRUE_TEXT.has(text)) return true;
+      if (FALSE_TEXT.has(text)) return false;
+      return this.fail(loc, 'bool_parsing');
+    }
+    return this.fail(loc, 'bool_type');
+  }
+
+  array(schema: Schema, value: unknown, loc: string): Result {
+    if (!Array.isArray(value)) return this.fail(loc, 'list_type');
+    // A list over the limit is refused for its length alone
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) return this.fail(loc, 'too_long');
+    const before = this.errors.length;
+    const items = value.map((item, index) => this.value(schema.items!, item, `${loc}.${index}`));
+    if (this.errors.length > before) return FAILED;
+    if (schema.minItems !== undefined && items.length < schema.minItems) return this.fail(loc, 'too_short');
+    return items;
+  }
+
+  object(schema: Schema, value: unknown, loc: string): Result {
+    if (!isObject(value)) return this.fail(loc, 'model_type');
+    const at = (key: string) => (loc ? `${loc}.${key}` : key);
+    const before = this.errors.length;
+    const properties = schema.properties ?? {};
+    const fields: Record<string, unknown> = {};
+    for (const [key, property] of Object.entries(properties)) {
+      if (Object.hasOwn(value, key)) fields[key] = this.value(property, value[key], at(key));
+      else if (schema.required?.includes(key)) this.fail(at(key), 'missing');
+      else fields[key] = property.default;
+    }
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(value)) if (!Object.hasOwn(properties, key)) this.fail(at(key), 'extra_forbidden');
+    }
+    return this.errors.length > before ? FAILED : fields;
+  }
+}
+
+function definition(ref: string): Schema {
+  const name = ref.replace('#/$defs/', '');
+  const found = SCHEMA.$defs?.[name];
+  if (!found) throw new Error(`No schema for ${ref}`);
+  return found;
 }
 
 /** The reasons the API would refuse a request body (sent as JSON), or none. */
 export function apiRefusals(body: unknown): string[] {
   // The API sees the JSON text: undefined fields are left out
-  const request = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
-  const refusals: string[] = [];
-  for (const key of Object.keys(request)) {
-    if (!['year', 'policies', 'household', 'include'].includes(key)) refusals.push(`${key}: unknown field`);
+  const request: unknown = body === undefined ? undefined : JSON.parse(JSON.stringify(body));
+  const check = new Check();
+  const properties = SCHEMA.properties!;
+  if (!isObject(request)) {
+    check.fail('', 'model_type');
+    return check.errors;
   }
-  const year = request.year;
-  if (typeof year !== 'number' || !Number.isInteger(year) || !POLICY_YEARS.includes(year)) refusals.push('year: not a policy year');
-  if (request.policies !== undefined && request.policies !== null) {
-    if (!Array.isArray(request.policies) || request.policies.length === 0) refusals.push('policies: none');
-  }
-  if (Array.isArray(request.include)) {
-    for (const part of request.include) if (part !== 'by_policy' && part !== 'sweep') refusals.push('include: unknown part');
-  }
-  const household = (request.household ?? {}) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(household)) {
-    if (key === 'children') continue;
-    const field = HOUSEHOLD[key];
-    if (!field) {
-      refusals.push(`household.${key}: unknown field`);
-      continue;
-    }
-    const refusal = fieldRefusal(`household.${key}`, field, value);
-    if (refusal) refusals.push(refusal);
-  }
-  const children = household.children ?? [];
-  if (!Array.isArray(children)) refusals.push('household.children: not a list');
-  else {
-    if (children.length > 10) refusals.push('household.children: more than 10');
-    children.forEach((child: Record<string, unknown>, index: number) => {
-      for (const key of Object.keys(child)) {
-        if (key !== 'age' && key !== 'in_education') refusals.push(`children.${index}.${key}: unknown field`);
-      }
-      const age = fieldRefusal(`children.${index}.age`, { kind: 'int', min: 0, max: 19 }, child.age);
-      if (age) refusals.push(age);
-      if (child.in_education !== undefined && child.in_education !== null && typeof child.in_education !== 'boolean') {
-        refusals.push(`children.${index}.in_education: not a boolean`);
-      }
-    });
-  }
-  const salaryYear = household.salary_year ?? 2026;
-  if (typeof salaryYear === 'number' && !POLICY_YEARS.includes(salaryYear)) refusals.push('household.salary_year: not a policy year');
-  if (typeof salaryYear === 'number' && typeof year === 'number' && salaryYear > year) {
-    refusals.push('household.salary_year: after year');
-  }
-  return refusals;
-}
+  const field = (key: string) => (Object.hasOwn(request, key) ? check.value(properties[key], request[key], key) : undefined);
+  const before = check.errors.length;
 
-export { BANDS, PLANS, POLICY_YEARS, REGIONS, TENURES };
+  // HouseholdImpactRequest's validators, from api.py: _policy_year,
+  // _known_measures and _salary_year check one field each once it is
+  // valid, and _salary_not_after_year the whole body once every field is
+  const year = Object.hasOwn(request, 'year') ? field('year') : check.fail('year', 'missing');
+  if (year !== FAILED && !POLICY_YEARS.includes(year as number)) check.fail('year', 'value_error');
+  const policies = field('policies');
+  if (Array.isArray(policies) && policies.some((id) => !MEASURE_IDS.includes(id as string))) {
+    check.fail('policies', 'value_error');
+  }
+  const householdDefaults = definition(properties.household.$ref!).properties!;
+  const household = Object.hasOwn(request, 'household')
+    ? field('household')
+    : { salary_year: householdDefaults.salary_year.default };
+  if (household !== FAILED && household !== undefined) {
+    const salaryYear = (household as { salary_year: number }).salary_year;
+    if (!POLICY_YEARS.includes(salaryYear)) check.fail('household', 'value_error');
+  }
+  field('include');
+  for (const key of Object.keys(request)) if (!Object.hasOwn(properties, key)) check.fail(key, 'extra_forbidden');
+
+  if (check.errors.length === before) {
+    const salaryYear = (household as { salary_year: number }).salary_year;
+    if (salaryYear > (year as number)) check.fail('', 'value_error');
+  }
+  return check.errors;
+}

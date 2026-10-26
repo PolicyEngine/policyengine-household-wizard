@@ -3,18 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { UK_CHILD_AGE_MESSAGE } from '@/uk-household/children';
 import { addChild, createBlankDraft, createTypicalDraft, setChildCount, updateHead, updatePartner } from '@/uk-household/draft';
 import type { UKHouseholdDraft } from '@/uk-household/types';
-import { UK_HOUSEHOLD_LIMITS, isComplete, validate } from '@/uk-household/validate';
+import { UK_HOUSEHOLD_LIMITS, UK_POLICY_YEARS, isComplete, validate } from '@/uk-household/validate';
 import { draftArb, yearArb } from './arbitraries';
 import { POLICY_YEARS } from './reference/householdImpactApi';
 
-const options = { year: 2027, years: POLICY_YEARS };
+const options = { year: 2027 };
 const codes = (draft: UKHouseholdDraft, opts: Parameters<typeof validate>[1] = options) =>
   validate(draft, opts).issues.map((issue) => issue.code);
 
 describe('validate', () => {
   it('accepts the typical draft in every policy year', () => {
     for (const year of POLICY_YEARS) {
-      expect(validate(createTypicalDraft(), { year, years: POLICY_YEARS })).toEqual({ ok: true, issues: [] });
+      expect(validate(createTypicalDraft(), { year })).toEqual({ ok: true, issues: [] });
     }
   });
 
@@ -30,12 +30,19 @@ describe('validate', () => {
 
   it('checks the year and the salary year', () => {
     const draft = createTypicalDraft();
-    expect(codes(draft, { year: 2032, years: POLICY_YEARS })).toEqual(['year.unsupported']);
+    expect(codes(draft, { year: 2032 })).toEqual(['year.unsupported']);
+    expect(codes(draft, { year: 2025 })).toEqual(['year.unsupported', 'salaryYear.afterYear']);
     expect(codes(draft, { year: 2027.5 })).toEqual(['year.unsupported']);
-    expect(codes(draft, { year: 2032 })).toEqual([]);
     expect(codes({ ...draft, salaryYear: 2028 })).toEqual(['salaryYear.afterYear']);
     expect(codes({ ...draft, salaryYear: 2025 })).toEqual(['salaryYear.unsupported']);
     expect(codes({ ...draft, salaryYear: 2027 })).toEqual([]);
+    // An app covering other years names them
+    expect(codes(draft, { year: 2032, years: [2026, 2032] })).toEqual([]);
+    expect(codes(draft, { year: 2027, years: [2026, 2028] })).toEqual(['year.unsupported']);
+  });
+
+  it('covers the household impact API’s policy years unless told otherwise', () => {
+    expect(UK_POLICY_YEARS).toEqual(POLICY_YEARS);
   });
 
   it('refuses unknown codes', () => {
@@ -137,9 +144,9 @@ describe('validate', () => {
   it('gives each issue a code under its path and a message, and ok only without issues', () => {
     fc.assert(
       fc.property(draftArb(), yearArb, (draft, year) => {
-        const result = validate(draft, { year, years: POLICY_YEARS });
+        const result = validate(draft, { year });
         expect(result.ok).toBe(result.issues.length === 0);
-        expect(isComplete(draft, { year, years: POLICY_YEARS })).toBe(result.ok);
+        expect(isComplete(draft, { year })).toBe(result.ok);
         for (const issue of result.issues) {
           expect(issue.code.startsWith(`${issue.path}.`)).toBe(true);
           expect(issue.message.length).toBeGreaterThan(0);
@@ -153,7 +160,7 @@ describe('validate', () => {
   it('never reads answers the calculation ignores', () => {
     fc.assert(
       fc.property(draftArb(), draftArb(), yearArb, (draft, other, year) => {
-        const opts = { year, years: POLICY_YEARS };
+        const opts = { year };
         const single = { ...draft, hasPartner: false };
         expect(validate({ ...single, partner: other.partner }, opts)).toEqual(validate(single, opts));
         const owner = { ...draft, tenure: 'OWNED_OUTRIGHT' as const };

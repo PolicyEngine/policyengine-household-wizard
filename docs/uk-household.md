@@ -74,15 +74,16 @@ choices, listed on `createTypicalDraft`.
 
 `validate(draft, { year, years?, statePension? })` returns
 `{ ok, issues }`, each issue a `code`, the `path` of the answer and a
-`message`. It checks only what the calculation reads, against the bounds the
-household impact API applies (`UK_HOUSEHOLD_LIMITS`), so a draft that passes
-builds a request the API accepts. Pass `years` (the policy years the app
-covers) to check the year itself.
+`message`. It checks only what the calculation reads, against the bounds and
+policy years the household impact API applies (`UK_HOUSEHOLD_LIMITS` and
+`UK_POLICY_YEARS`, 2026 to 2031), so a draft that passes builds a request the
+API accepts when it is sent with measures and parts the API knows. Pass
+`years` to check against an app's own policy years instead.
 
 | Code | When |
 | --- | --- |
-| `year.unsupported` | The year is not a whole number, or not in `years`. |
-| `salaryYear.unsupported`, `salaryYear.afterYear` | Salaries for a year not covered, or after the policy year (they are only grown forward). |
+| `year.unsupported` | The year is not a whole number, or not in `years` (`UK_POLICY_YEARS` unless given). |
+| `salaryYear.unsupported`, `salaryYear.afterYear` | Salaries for a year not in `years`, or after the policy year (they are only grown forward). |
 | `region.*`, `tenure.*`, `councilTaxBand.*` | `.required` when unanswered, `.invalid` for an unknown code. |
 | `claimsUniversalCredit.required` | Not answered. |
 | `head.age.*`, `partner.age.*` | `.required`, `.notWhole`, `.outOfRange` (16 to 100). The partner only with a partner. |
@@ -114,9 +115,12 @@ sy=2026&region=LONDON&tenure=RENT_PRIVATELY&rent=1500&band=D&uc=1
 &petrol=620&diesel=340&elec=1040&cc=400
 ```
 
-The keys are documented in `src/uk-household/serialize.ts`. Every draft
-round-trips, and reading never throws: unknown codes come back unanswered and
-amounts that are not numbers come back blank. `extras` are not written.
+The keys are documented in `src/uk-household/serialize.ts`. A draft read
+back from its link is the same draft, except that a private pension left out
+(`null` or `undefined`) comes back as 0 and electricity left out as `null`:
+each means the same and gives the same request. Reading never throws:
+unknown codes come back unanswered and amounts that are not numbers come
+back blank. `extras` are not written.
 
 ## The household impact request
 
@@ -148,11 +152,25 @@ form can hold. Two differences are intended, both on requests the API
 refused: a partner age it would refuse is left out without a partner, and a
 region named after an object built-in (`constructor`) takes the UK average
 rent. Other property tests check the invariants above, that every draft
-`validate()` accepts builds a request the API's constraints accept
-(`reference/householdImpactApi.ts` mirrors them), and that drafts round-trip
-through links.
+`validate()` accepts builds a request the API accepts, and that drafts
+round-trip through links.
 
-When the dashboard's API changes, update `UK_HOUSEHOLD_LIMITS`, the adapter
-and the API mirror together, and add fixtures captured from the dashboard's
-code. Leave the reference copy as it is: it records what the dashboard sent
+"The API accepts" is checked against `reference/householdImpactApi.ts`, a
+mirror of the API's request models. It reads their JSON schema and choices
+(regions, measures, policy years and the rest) from
+`tests/fixtures/uk/household-impact-api.json`, which
+`tests/fixtures/uk/capture_household_impact_api.py` writes by running the
+dashboard's own models under pydantic on 3,050 bodies: each field set to
+each kind of value pydantic converts or refuses, unknown and prototype keys,
+the year rules, random combinations of these, and the 32 dashboard requests.
+`apiMirror.test.ts` checks that the mirror gives every one pydantic's
+verdict, errors included. The models' four validators (the policy year, the
+salary year twice, and the measures) are copied into the mirror by hand, and
+the capture stops if they change.
+
+When the dashboard's API changes, rerun the capture (its docstring has the
+command), then update `UK_HOUSEHOLD_LIMITS`, `UK_POLICY_YEARS` and the
+adapter together; the tests say what no longer matches. Add fixtures captured
+from the dashboard's code for a new field. Leave
+`reference/dashboardRequest.ts` as it is: it records what the dashboard sent
 before it used this package.

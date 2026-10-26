@@ -9,7 +9,7 @@ import { deserializeDraft, serializeDraft } from '@/uk-household/serialize';
 import { atStatePensionAge, statePensionEntered, type UKStatePensionTable } from '@/uk-household/statePension';
 import { UK_HOUSEHOLD_LIMITS, validate } from '@/uk-household/validate';
 import { adultArb, draftArb, includeArb, policiesArb, yearArb } from './arbitraries';
-import { POLICY_YEARS, apiRefusals } from './reference/householdImpactApi';
+import { API, MEASURE_IDS, apiRefusals } from './reference/householdImpactApi';
 
 /**
  * The household impact request's invariants, for every draft. The request
@@ -249,17 +249,26 @@ describe('toHouseholdImpactRequest', () => {
   });
 
   it('builds a request the API accepts from every draft validate() accepts', () => {
-    // Drafts near the bounds, so many pass: the API's ages, 2026 salaries
+    // Drafts near the bounds, so many pass: ages either side of the API's,
+    // salaries for years either side of its policy years. The API's check is
+    // its whole request check: every field's type, bound and choice, and its
+    // year, salary year and measure validators (the mirror gives pydantic's
+    // verdict on every case apiMirror.test.ts holds)
     const near = draftArb({
       adultAges: fc.option(fc.integer({ min: 14, max: 102 }), { nil: null }),
       childAges: fc.option(fc.integer({ min: 0, max: 21 }), { nil: null }),
-      salaryYears: fc.constantFrom(2026, 2027),
+      salaryYears: fc.oneof(
+        { arbitrary: fc.constant(2026), weight: 3 },
+        { arbitrary: fc.constantFrom(2025, 2027, 2031, 2032), weight: 1 },
+      ),
     });
+    const years = fc.oneof({ arbitrary: fc.constantFrom(...API.choices.policy_years), weight: 3 }, { arbitrary: yearArb, weight: 1 });
+    const measures = fc.subarray([...MEASURE_IDS], { minLength: 1 });
     let accepted = 0;
     fc.assert(
-      fc.property(near, fc.constantFrom(...POLICY_YEARS), includeArb, (draft, year, include) => {
-        const body = toHouseholdImpactRequest(draft, { year, policies: ['a'], include });
-        if (validate(draft, { year, years: POLICY_YEARS }).ok) {
+      fc.property(near, years, measures, includeArb, (draft, year, policies, include) => {
+        const body = toHouseholdImpactRequest(draft, { year, policies, include });
+        if (validate(draft, { year }).ok) {
           accepted += 1;
           expect(apiRefusals(body)).toEqual([]);
         }
@@ -280,15 +289,46 @@ describe('toHouseholdImpactRequest', () => {
       head: { ...createBlankDraft().head, age: 40 },
     };
     for (const draft of [createTypicalDraft(), blank]) {
-      expect(validate(draft, { year: 2027, years: POLICY_YEARS })).toEqual({ ok: true, issues: [] });
+      expect(validate(draft, { year: 2027 })).toEqual({ ok: true, issues: [] });
       // A blank partner's unanswered age is left out, so a single person's
       // request is not refused for it
-      expect(apiRefusals(toHouseholdImpactRequest(draft, { year: 2027, policies: ['a'] }))).toEqual([]);
+      expect(apiRefusals(toHouseholdImpactRequest(draft, { year: 2027, policies: [MEASURE_IDS[0]] }))).toEqual([]);
     }
   });
 
-  it('keeps every bound validate() applies within the API limits it names', () => {
-    expect(UK_HOUSEHOLD_LIMITS.childAge.max).toBe(19);
-    expect(UK_HOUSEHOLD_LIMITS.adultAge).toEqual({ min: 16, max: 100 });
+  it('applies the bounds the API’s request models set', () => {
+    const household = API.schema.$defs!.HouseholdAnswersRequest.properties!;
+    const child = API.schema.$defs!.HouseholdChildRequest.properties!;
+    // The bounds of a field, Optional or not
+    const bounds = (field: (typeof household)[string]) => {
+      const schema = field.anyOf?.[0] ?? field;
+      return { min: schema.minimum, max: schema.maximum };
+    };
+    const limits = UK_HOUSEHOLD_LIMITS;
+    expect(bounds(household.age)).toEqual(limits.adultAge);
+    expect(bounds(household.partner_age)).toEqual(limits.adultAge);
+    expect(bounds(child.age)).toEqual(limits.childAge);
+    expect(household.children.maxItems).toBe(limits.maxChildren);
+    const amounts = {
+      maxAmount: [
+        'employment_income',
+        'partner_employment_income',
+        'private_pension_income',
+        'partner_private_pension_income',
+        'dividend_income',
+        'savings_interest_income',
+        'property_income',
+        'salary_sacrifice_pension_contributions',
+      ],
+      maxMonthlyRent: ['monthly_rent'],
+      maxMonthlyChildcare: ['monthly_childcare'],
+      maxSpending: ['petrol_spending', 'diesel_spending', 'electricity_spending'],
+      maxStatePension: ['state_pension', 'partner_state_pension'],
+    } as const;
+    for (const [limit, fields] of Object.entries(amounts)) {
+      for (const field of fields) {
+        expect({ field, ...bounds(household[field]) }).toEqual({ field, min: 0, max: limits[limit as keyof typeof amounts] });
+      }
+    }
   });
 });
