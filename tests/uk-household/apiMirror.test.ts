@@ -4,9 +4,9 @@ import { API, MIRRORED_VALIDATORS, apiRefusals, type ApiCase } from './reference
 
 /**
  * A differential test: reference/householdImpactApi.ts against the
- * dashboard's own request models, run under pydantic by
+ * dashboard's own request models, served from a FastAPI endpoint by
  * capture_household_impact_api.py. The mirror must give every captured case
- * pydantic's verdict and the same errors, so the tests that lean on it
+ * the endpoint's verdict and the same errors, so the tests that lean on it
  * (requests the package builds are ones the API accepts) say what the API
  * does.
  */
@@ -40,11 +40,11 @@ describe('the household impact API mirror', () => {
     expect(apiRefusals(API.base)).toEqual([]);
   });
 
-  it('gives every captured case pydantic’s verdict and errors', () => {
+  it('gives every captured case the API’s verdict and errors', () => {
     const disagreements = API.cases.flatMap((apiCase) => {
       const errors = [...new Set(apiRefusals(bodyFor(apiCase)))].sort();
       const same = errors.length === 0 === apiCase.accepted && JSON.stringify(errors) === JSON.stringify(apiCase.errors);
-      return same ? [] : [{ name: apiCase.name, pydantic: apiCase.errors, mirror: errors }];
+      return same ? [] : [{ name: apiCase.name, api: apiCase.errors, mirror: errors }];
     });
     expect(disagreements).toEqual([]);
   });

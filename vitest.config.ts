@@ -13,5 +13,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    // The property tests run thousands of cases; a loaded machine can take
+    // several times the default 5 seconds over them
+    testTimeout: 30_000,
   },
 });

@@ -120,11 +120,13 @@ sy=2026&region=LONDON&tenure=RENT_PRIVATELY&rent=1500&band=D&uc=1
 The keys are documented in `src/uk-household/serialize.ts`. A draft read
 back from its link is the same draft, except that a private pension left out
 (`null` or `undefined`) comes back as 0 and electricity left out as `null`:
-each means the same and gives the same request. Also, -0 comes back as 0,
-and an age or amount that is not a finite number is not written, so it comes
-back blank. Reading never throws:
-unknown codes come back unanswered and amounts that are not numbers come
-back blank. `extras` are not written.
+each means the same and gives the same request. Also, -0 comes back as 0;
+an age, salary year or amount that is not a finite number is not written, so
+it comes back blank and the salary year as the default year; a child missing
+from the list (a hole or `null`) comes back unanswered; and an education
+answer other than `true` or `false` comes back unanswered. Reading never
+throws: unknown codes come back unanswered and amounts that are not numbers
+come back blank. `extras` are not written.
 
 ## The household impact request
 
@@ -160,31 +162,47 @@ rent. Other property tests check the invariants above, that every draft
 round-trip through links.
 
 "The API accepts" is checked against `reference/householdImpactApi.ts`, a
-mirror of the API's endpoint. It reads the request models' JSON schema and
-choices (regions, measures, policy years and the rest) from
-`tests/fixtures/uk/household-impact-api.json`, which
-`tests/fixtures/uk/capture_household_impact_api.py` writes. The capture
+mirror of the validation the API's endpoint does before its own code runs.
+It reads the request models' JSON schema and choices (regions, measures,
+policy years and the rest) from `tests/fixtures/uk/household-impact-api.json`,
+which `tests/fixtures/uk/capture_household_impact_api.py` writes. The capture
 serves the dashboard's own models from a FastAPI endpoint that takes the
 body as a `HouseholdImpactRequest`, as the dashboard's does, and posts it
-4,332 bodies: each field set to each kind of value pydantic converts or
-refuses (number text included, down to underscores and the 4,300-digit
-limit), unknown and prototype keys, the year rules, random combinations of
-these, and the 32 dashboard requests. It records each verdict and the
-errors in each 422. It stops unless pydantic, pydantic-core, FastAPI and
-Starlette are the versions the dashboard's `uv.lock` pins, and it reads
-policyengine-uk's choices at the version the lock pins. `apiMirror.test.ts`
-checks that the mirror gives every body the same verdict and errors.
+4,394 bodies: each field set to each kind of value pydantic converts or
+refuses (number text included, down to underscores and integer text longer
+than 4,300 characters, the minus sign counted), unknown and prototype keys,
+text holding an unpaired surrogate, the year rules, random combinations of
+these, and the 32 dashboard requests. It records each verdict and the errors
+in each 422. A body holding an unpaired surrogate gets a 500 instead, which
+the mirror gives as `(body): server_error`. What the endpoint's own code
+refuses once it runs (a `ValueError` is a 400, a calculation past its time
+limit a 504) is not covered. The capture stops unless pydantic,
+pydantic-core, FastAPI and Starlette are the versions the dashboard's
+`uv.lock` pins, and it reads policyengine-uk's choices at the version the
+lock pins. `apiMirror.test.ts` checks that the mirror gives every body the
+same verdict and errors.
 
 The models' four validators (the policy year, the salary year twice, and the
 measures) are copied into the mirror by hand. The capture stops if a
 validator is added, removed or renamed. It records each validator's code, so
 `apiMirror.test.ts` fails when one changes until the mirror copies it again.
-It also stops if the dashboard changes how the choices and the validators'
-rules are reached: any statement that binds `measure_ids`, the reform list
-or its cache, the combined measure's id or `POLICY_YEARS`, or the names
-`api.py` imports for them; the id the combined reform is built with; or the
-endpoint's body (one `HouseholdImpactRequest`, with no exception handler in
-`api.py`). It reads the measures' ids from `_MEASURE_FACTORIES` itself.
+It also stops if the dashboard changes, in the files it reads:
+
+- how `api.py` builds and changes `app`: `FastAPI(...)` with its keywords
+  (exception handlers among them), middleware, handlers set later, each
+  route, the household impact route's whole signature, and any function that
+  uses `app`. Documentation keywords such as `summary` are left out, so
+  changing them does not stop it;
+- the statements that bind or change the names the choices, the bounds, the
+  models, `measure_ids`, the reform list and its cache, the combined
+  measure's id and `POLICY_YEARS` are read through, or the names `api.py`
+  imports for them. Changing a value in place counts: setting or deleting an
+  item or attribute, a method such as `pop` or `update`, or `setattr`. The
+  choices, bounds and models must each be bound by one statement and never
+  changed;
+- the id the combined reform is built with.
+
+It reads the measures' ids from `_MEASURE_FACTORIES` itself.
 
 When the dashboard's API changes, rerun the capture (its docstring has the
 command), then update `UK_HOUSEHOLD_LIMITS`, `UK_POLICY_YEARS` and the

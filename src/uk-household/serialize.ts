@@ -26,7 +26,10 @@ import type { UKAdultDraft, UKChildDraft, UKHeadDraft, UKHouseholdDraft } from '
  *   left out for the default (`null`).
  *
  * `extras` are not written, nor is an age, year or amount that is not a
- * finite number. A private pension or electricity left out (`undefined`)
+ * finite number: it comes back blank, and the salary year as the default
+ * year. A child missing from the list (a hole or `null`) is written as an
+ * unanswered child, and an education answer other than true or false is
+ * not written. A private pension or electricity left out (`undefined`)
  * comes back as 0 or `null`, which mean the same. Unknown codes in a link
  * are read as unanswered (a plan as `NONE`), and an amount that is not a
  * number keeps its blank value.
@@ -97,8 +100,8 @@ function readAdult<T extends UKAdultDraft>(raw: string, base: T, tokens: Array<[
   return adult;
 }
 
-// A missing child (a hole in the list) is written as an unanswered one
-function writeChild(child: UKChildDraft | undefined): string {
+// A missing child (a hole in the list, or null) is written as an unanswered one
+function writeChild(child: UKChildDraft | null | undefined): string {
   const age = writeAge(child?.age);
   const education = child?.inEducation === true ? 'y' : child?.inEducation === false ? 'n' : '';
   return `${age}${education}`;

@@ -128,6 +128,11 @@ def household_impact_choices(dashboard: Path, commit: str, uk: Path, version: st
         for alias in node.names
     }
     assigned = module_assignments(tree)
+    read = (
+        "REGIONS", "TENURES", "OLDEST_CHILD_AGE", "SALARY_YEAR", "PARTS", "ELECTRICITY_SPENDING",
+        "STUDENT_LOAN_PLANS", "BRMAS", "LOCAL_AUTHORITIES", "COUNCIL_TAX_BANDS",
+    )
+    bound_once(tree, "household_impact.py", *read)
     choices = {}
     for name in ("REGIONS", "TENURES", "OLDEST_CHILD_AGE", "SALARY_YEAR", "PARTS"):
         choices[name] = ast.literal_eval(assigned[name])
@@ -143,29 +148,67 @@ def household_impact_choices(dashboard: Path, commit: str, uk: Path, version: st
         assert isinstance(generator, ast.GeneratorExp), ast.unparse(value)
         assert ast.unparse(generator.elt) == f"{generator.generators[0].target.id}.name", ast.unparse(value)
         enum = generator.generators[0].iter.id
+        bound_once(tree, "household_impact.py", enum)
         choices[name] = enum_names(uk, version, imported[enum], enum)
     return SimpleNamespace(**choices)
 
 
 DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+# The methods that change a list, dict or set in place
+MUTATORS = {
+    "append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse", "update", "setdefault",
+    "popitem", "add", "discard", "__setitem__", "__delitem__", "__setattr__", "__delattr__",
+}
+
+
+def chain_root(node: ast.expr) -> str | None:
+    """The name an attribute or subscript chain starts from (``a`` in ``a.b[0]``)."""
+    while isinstance(node, (ast.Attribute, ast.Subscript)):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+def changed_names(node: ast.AST) -> set[str]:
+    """The names whose values the code changes in place: an attribute or item
+    set or deleted (``a.b = …``, ``del a[0]``), a mutating method called
+    (``a.pop()``), or ``setattr``/``delattr`` on one."""
+    names = set()
+    for child in ast.walk(node):
+        if isinstance(child, (ast.Attribute, ast.Subscript)) and isinstance(child.ctx, (ast.Store, ast.Del)):
+            names.add(chain_root(child))
+        elif isinstance(child, ast.Call):
+            if isinstance(child.func, ast.Attribute) and child.func.attr in MUTATORS:
+                names.add(chain_root(child.func.value))
+            elif isinstance(child.func, ast.Name) and child.func.id in ("setattr", "delattr") and child.args:
+                names.add(chain_root(child.args[0]))
+    return names - {None}
 
 
 def bound_names(statement: ast.stmt) -> set[str]:
-    """The module's names a top-level statement binds: what it assigns,
-    defines or imports, and what a function it defines declares ``global``."""
+    """The module's names a top-level statement binds or changes: what it
+    assigns, defines or imports, what a function it defines declares
+    ``global``, and what it changes in place (``changed_names``, in a
+    function's body too)."""
     if isinstance(statement, DEFINITIONS):
-        return {statement.name} | {
-            name for node in ast.walk(statement) if isinstance(node, ast.Global) for name in node.names
-        }
-    names = set()
+        declared = {name for node in ast.walk(statement) if isinstance(node, ast.Global) for name in node.names}
+        return {statement.name} | declared | changed_names(statement)
+    names = changed_names(statement)
     for node in ast.walk(statement):
         if isinstance(node, DEFINITIONS):
             names.add(node.name)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
             names.add(node.id)
     return names
+
+
+def bound_once(tree: ast.Module, where: str, *names: str):
+    """Stop unless each name is bound by one top-level statement and never
+    changed: the capture reads its one value."""
+    for name in names:
+        found = bindings(tree, name)
+        assert len(found) == 1, f"{where} binds or changes {name} {len(found)} times: {found}"
 
 
 def bindings(tree: ast.Module, name: str) -> list[str]:
@@ -242,6 +285,22 @@ WIRING = {
     ("budget_years.py", "POLICY_YEARS"): ["POLICY_YEARS = _CONFIG['policy_years']"],
     ("api.py", "POLICY_YEARS"): ["from uk_budget_data.budget_years import POLICY_YEARS"],
     ("api.py", "household_impact"): ["from uk_budget_data import household_impact"],
+    # The names request_models fills in for the classes
+    ("api.py", "BaseModel"): ["from pydantic import BaseModel"],
+    ("api.py", "Field"): ["from pydantic import Field"],
+    ("api.py", "field_validator"): ["from pydantic import field_validator"],
+    ("api.py", "model_validator"): ["from pydantic import model_validator"],
+    ("api.py", "Literal"): ["from typing import Literal"],
+    ("api.py", "Optional"): ["from typing import Optional"],
+    # And the names the app is built with
+    ("api.py", "FastAPI"): ["from fastapi import FastAPI"],
+    ("api.py", "Query"): ["from fastapi import Query"],
+    ("api.py", "Response"): ["from fastapi import Response"],
+    ("api.py", "CORSMiddleware"): ["from fastapi.middleware.cors import CORSMiddleware"],
+    ("api.py", "lifespan"): [
+        "@asynccontextmanager\nasync def lifespan(app: FastAPI):\n"
+        "    try:\n        yield\n    finally:\n        stop_workers()"
+    ],
 }
 
 
@@ -262,49 +321,88 @@ def check_wiring(dashboard: Path, commit: str):
         if keyword.arg == "id"
     ]
     assert combined == ["AUTUMN_BUDGET_2026_COMBINED_ID"], f"The combined reform's id is {combined}"
-    # The endpoint takes the whole body as one HouseholdImpactRequest, and
-    # api.py sets no handler that would change its 422s
-    api = trees["api.py"]
-    assert endpoint_body(api) == ["data: HouseholdImpactRequest"], endpoint_body(api)
-    handlers = [
-        ast.unparse(node)
-        for node in ast.walk(api)
-        if isinstance(node, ast.Attribute) and node.attr in ("exception_handler", "add_exception_handler")
-    ]
-    assert not handlers, f"api.py sets exception handlers: {handlers}"
+    # The app: how api.py builds it, its middleware, its exception handlers,
+    # its routes, and the household impact endpoint's parameters
+    found = app_wiring(trees["api.py"])
+    assert found == APP_WIRING, f"api.py builds or changes app differently now: {found!r}"
 
 
-def endpoint_body(api: ast.Module) -> list[str]:
-    """The parameters FastAPI reads from the body of api.py's household
-    impact endpoint: those that are not a ``Response`` or a ``Query``."""
-    routes = [
-        node
-        for node in api.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(ast.unparse(decorator) == "app.post('/api/household-impact')" for decorator in node.decorator_list)
-    ]
-    assert len(routes) == 1, f"{len(routes)} household impact endpoints"
-    arguments = routes[0].args
-    positional = arguments.posonlyargs + arguments.args
-    defaults = dict(zip([argument.arg for argument in positional][::-1], arguments.defaults[::-1]))
-    defaults.update(
-        (argument.arg, default) for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults) if default
-    )
-    body = []
-    for argument in positional + arguments.kwonlyargs:
-        annotation = ast.unparse(argument.annotation) if argument.annotation else ""
-        default = defaults.get(argument.arg)
-        if annotation == "Response" or (isinstance(default, ast.Call) and ast.unparse(default.func) == "Query"):
+# Keywords that only document an API (its OpenAPI page), not what it accepts
+DOCUMENTATION = {
+    "title", "description", "summary", "version", "examples", "openapi_examples", "deprecated",
+    "include_in_schema", "contact", "license_info", "openapi_tags", "tags", "response_description",
+}
+HOUSEHOLD_ROUTE = "app.post('/api/household-impact')"
+
+
+class Undocumented(ast.NodeTransformer):
+    def visit_Call(self, node):
+        self.generic_visit(node)
+        node.keywords = [keyword for keyword in node.keywords if keyword.arg not in DOCUMENTATION]
+        return node
+
+
+def names_app(node: ast.AST) -> bool:
+    return any(isinstance(child, ast.Name) and child.id == "app" for child in ast.walk(node))
+
+
+def app_wiring(api: ast.Module) -> list[str]:
+    """How api.py builds and changes ``app``, as ``ast.unparse`` gives it
+    without documentation keywords: each top-level statement that names
+    ``app`` (``app = FastAPI(...)``, ``app.add_middleware(...)``), each other
+    route by its decorators and name, the household impact route with its
+    whole signature, and a function whose body names ``app`` in full."""
+    found = []
+    for statement in api.body:
+        statement = Undocumented().visit(copy.deepcopy(statement))
+        if not isinstance(statement, DEFINITIONS):
+            if names_app(statement):
+                found.append(ast.unparse(statement))
             continue
-        body.append(f"{argument.arg}: {annotation}")
-    return body
+        if any(names_app(node) for node in statement.body):
+            if ast.get_docstring(statement) is not None:
+                statement.body = statement.body[1:] or [ast.Pass()]
+            found.append(ast.unparse(statement))
+            continue
+        decorators = [decorator for decorator in statement.decorator_list if names_app(decorator)]
+        if not decorators:
+            continue
+        if HOUSEHOLD_ROUTE in map(ast.unparse, decorators):
+            statement.body = [ast.Expr(ast.Constant(...))]
+            found.append(ast.unparse(statement))
+        else:
+            found.append("".join(f"@{ast.unparse(decorator)}\n" for decorator in decorators) + statement.name)
+    return found
+
+
+# What app_wiring finds in api.py: the capture stops if any of it changes,
+# since the endpoint it serves the models from would then differ from the
+# API's (a body embedded under a key, a required query, an exception handler
+# or middleware that answers in place of the 422, another route for the path)
+APP_WIRING = [
+    "app = FastAPI(lifespan=lifespan)",
+    "app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], "
+    "allow_headers=['*'])",
+    "@app.post('/api/personal-impact')\ncalculate_personal_impact",
+    "@app.post('/api/personal-impact/stream')\ncalculate_personal_impact_stream",
+    "@app.post('/api/household-impact')\n"
+    "async def calculate_household_impact(data: HouseholdImpactRequest, response: Response, "
+    "definition: list[str]=Query(default=[])):\n    ...",
+    "@app.get('/api/health')\nhealth_check",
+    "@app.get('/api/version')\nversion",
+    "def main():\n"
+    "    import uvicorn\n"
+    "    port = int(os.environ.get('PORT', 5001))\n"
+    "    print(f'Starting UK Budget Personal Impact API on port {port}...')\n"
+    "    uvicorn.run(app, host='0.0.0.0', port=port)",
+]
 
 
 def measure_ids(dashboard: Path, commit: str) -> list[str]:
     """The ids of ``_MEASURE_FACTORIES``' reforms, in order: what
     ``household_impact.measure_ids()`` returns (every single measure)."""
     tree = ast.parse(git_show(dashboard, commit, "src/uk_budget_data/reforms.py"))
-    assert len(bindings(tree, "_MEASURE_FACTORIES")) == 1, "_MEASURE_FACTORIES is bound more than once"
+    bound_once(tree, "reforms.py", "_MEASURE_FACTORIES")
     assigned = module_assignments(tree)
     constants = {
         name: value.value
@@ -314,6 +412,7 @@ def measure_ids(dashboard: Path, commit: str) -> list[str]:
     factories = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
     ids = []
     for factory in assigned["_MEASURE_FACTORIES"].elts:
+        bound_once(tree, "reforms.py", factory.id)
         reform_ids = [
             keyword.value
             for node in ast.walk(factories[factory.id])
@@ -323,6 +422,8 @@ def measure_ids(dashboard: Path, commit: str) -> list[str]:
         ]
         assert len(reform_ids) == 1, factory.id
         value = reform_ids[0]
+        if isinstance(value, ast.Name):
+            bound_once(tree, "reforms.py", value.id)
         ids.append(constants[value.id] if isinstance(value, ast.Name) else ast.literal_eval(value))
     return ids
 
@@ -330,6 +431,9 @@ def measure_ids(dashboard: Path, commit: str) -> list[str]:
 def request_models(dashboard: Path, commit: str, household_impact: SimpleNamespace, policy_years: list[int]):
     source = git_show(dashboard, commit, "src/uk_budget_data/api.py")
     tree = ast.parse(source)
+    # The classes are run once, as written, with MAX_AMOUNT's one value; the
+    # names they take from pydantic and typing are checked in WIRING
+    bound_once(tree, "api.py", "MAX_AMOUNT", *MODELS)
     assigned = module_assignments(tree)
     namespace = {
         "BaseModel": BaseModel,
@@ -455,6 +559,8 @@ ANY = [
     " 1_0", "1_0 ", "1_0\t", "1._5", "1_.5", "+_1", "-_1", "1_e5", "1e_5", "i_nf", " i_nf", "n_an",
     "0__1", "0_0", "00__0", "0_", "0-1", "00-5", "-0_1", "-0-1", "1_0.0", "1_0.00", "1.0_0", "0.",
     "00.0", "0_.0", "+-1", "-+1", "--1", "++1", "-", "+", "+0",
+    # Unpaired surrogates, which JSON can carry and UTF-8 cannot
+    "\ud800", "2027\udc00",
     # Integers past 2**53 that fit an int64, as JavaScript writes them
     4611686018427388000, -4611686018427388000,
     [], [30], {}, {"value": 30},
@@ -504,8 +610,8 @@ def cases_for(model, base, choices):
         add(f"body = {json.dumps(value)}", body=value)
     for key in ["year", "policies", "household", "include"]:
         add(f"without {key}", remove=[[key]])
-    for key in ["unknown", "Year", *PROTOTYPE_KEYS]:
-        add(f"{key} at the top", set=[[[key], 0]])
+    for key in ["unknown", "Year", *PROTOTYPE_KEYS, "\ud800"]:
+        add(f"{json.dumps(key)[1:-1]} at the top", set=[[[key], 0]])
 
     # The year and the salary year
     for year in [*choices["policy_years"], 2025, 2032, 0, "2027", " 2027", 2027.5, None, True, "x"]:
@@ -550,8 +656,8 @@ def cases_for(model, base, choices):
         add(f"without household.{name}", set=[[["household", name], 0]], remove=[["household", name]])
         for value in field_values(name, field_info, literal_choices.get(name, ["x"])):
             add(f"household.{name} = {json.dumps(value)}", set=[[["household", name], value]])
-    for key in ["unknown", "Age", "partner", *PROTOTYPE_KEYS]:
-        add(f"household.{key}", set=[[["household", key], 0]])
+    for key in ["unknown", "Age", "partner", *PROTOTYPE_KEYS, "\ud800"]:
+        add(f"household.{json.dumps(key)[1:-1]}", set=[[["household", key], 0]])
 
     # Children
     child = {"age": 5}
@@ -610,16 +716,31 @@ def endpoint(model) -> TestClient:
     async def household_impact(data: model):  # type: ignore[valid-type]
         return {}
 
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def holds_lone_surrogate(value) -> bool:
+    if isinstance(value, str):
+        return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+    if isinstance(value, list):
+        return any(map(holds_lone_surrogate, value))
+    if isinstance(value, dict):
+        return any(holds_lone_surrogate(key) or holds_lone_surrogate(item) for key, item in value.items())
+    return False
 
 
 def verdict(client, model, body):
     """The endpoint's verdict on the body, sent as JSON: accepted, or its
-    422's errors (FastAPI puts ``body`` first in each location)."""
+    422's errors (FastAPI puts ``body`` first in each location), or a 500
+    (``(body): server_error``), which it gives a body holding an unpaired
+    surrogate."""
     text = json.dumps(body, allow_nan=False)
     response = client.post("/api/household-impact", content=text, headers={"content-type": "application/json"})
     if response.status_code == 200:
         found = {"accepted": True, "errors": []}
+    elif response.status_code == 500:
+        assert holds_lone_surrogate(body), f"500 for {text}"
+        found = {"accepted": False, "errors": ["(body): server_error"]}
     else:
         assert response.status_code == 422, f"{response.status_code} for {text}"
         locations = [error["loc"] for error in response.json()["detail"]]
@@ -634,7 +755,7 @@ def verdict(client, model, body):
     try:
         model.model_validate(json.loads(text))
         accepted = True
-    except ValidationError:
+    except (ValidationError, UnicodeEncodeError):
         accepted = False
     assert accepted == found["accepted"], f"The endpoint and its model differ on {text}"
     return found
@@ -717,7 +838,8 @@ def main():
     lines[-1] = lines[-1].rstrip(",")
     lines += [" },", f' "schema": {header["schema"]},', f' "validators": {header["validators"]},']
     lines += [f' "base": {header["base"]},', ' "cases": [']
-    lines += [f"  {json.dumps(case, ensure_ascii=False)}," for case in cases]
+    # ASCII, so an unpaired surrogate is written as its escape
+    lines += [f"  {json.dumps(case)}," for case in cases]
     lines[-1] = lines[-1].rstrip(",")
     lines += [" ]", "}"]
     OUT.write_text("\n".join(lines) + "\n")

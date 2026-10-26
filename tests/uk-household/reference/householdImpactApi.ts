@@ -21,7 +21,12 @@ import { fileURLToPath } from 'node:url';
  *
  * Each refusal is an error from the API's 422: where
  * (`household.children.0.age`, or `(body)` for the whole body) and its type
- * (`less_than_equal`).
+ * (`less_than_equal`). A body holding an unpaired surrogate (`"\ud800"`)
+ * gets a 500 from the API instead, given here as `(body): server_error`.
+ *
+ * It covers the validation FastAPI does before the endpoint runs, not what
+ * the endpoint's own code refuses once it runs: in api.py, a `ValueError` is
+ * a 400, a calculation past its time limit a 504 and any other error a 500.
  */
 
 type Schema = {
@@ -41,7 +46,7 @@ type Schema = {
   type?: 'array' | 'boolean' | 'integer' | 'null' | 'number' | 'object' | 'string';
 };
 
-/** A change to the base body, and pydantic's verdict on the result. */
+/** A change to the base body, and the API's verdict on the result. */
 export interface ApiCase {
   name: string;
   /** Paths given new values; `remove`: paths taken out. */
@@ -52,7 +57,7 @@ export interface ApiCase {
   /** The request of this name in dashboard-households.json instead. */
   fixture?: string;
   accepted: boolean;
-  /** pydantic's errors, as `location: type`. */
+  /** The errors in the API's 422, as `location: type`. */
   errors: string[];
 }
 
@@ -107,6 +112,18 @@ type Result = unknown;
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// Half of a surrogate pair without the other half
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+function holdsLoneSurrogate(value: unknown): boolean {
+  if (typeof value === 'string') return LONE_SURROGATE.test(value);
+  if (Array.isArray(value)) return value.some(holdsLoneSurrogate);
+  if (isObject(value)) {
+    return Object.entries(value).some(([key, item]) => LONE_SURROGATE.test(key) || holdsLoneSurrogate(item));
+  }
+  return false;
+}
+
 /**
  * Whether Python reads the number's JSON text as a float: JSON.stringify
  * writes a fraction or an exponent only for a non-integer or a number of
@@ -118,8 +135,8 @@ const isFloatText = (value: number) => /[.e]/.test(String(value));
 // str_as_int, clean_int_str, strip_leading_zeros, str_as_float and
 // strip_underscores), with jiter 0.11.1 reading the integers
 
-// A JSON integer, as jiter reads one. It reads at most 4,300 characters of
-// digits (with the minus sign); a longer run is out of range.
+// A JSON integer, as jiter reads one. It reads a run of at most 4,300
+// characters, the minus sign included; a longer run is out of range.
 const JSON_INT = /^-?(?:0|[1-9][0-9]*)$/;
 const JSON_INT_RUN = /^-?[1-9][0-9]*/;
 const INT_CHARACTERS = 4300;
@@ -141,9 +158,11 @@ function stripUnderscores(text: string): string | undefined {
   return text.replace(/_/g, '');
 }
 
-// Leading zeros taken out (and underscores among them), keeping one before a
-// point or when the number is zero; undefined when the text does not start
-// with a digit or a minus sign
+// Leading zeros taken out, with underscores among them. The character before
+// a point is kept, or the last character when nothing else follows (either
+// can be an underscore, which then fails). Undefined when the text does not
+// start with a digit or a minus sign, or its leading zeros are followed by
+// anything but a digit, a minus sign or a point.
 function stripLeadingZeros(text: string): string | undefined {
   if (text[0] !== '0') return /^[1-9-]/.test(text) ? text : undefined;
   for (let index = 1; index < text.length; index++) {
@@ -363,6 +382,10 @@ export function apiRefusals(body: unknown): string[] {
   const request: unknown = body === undefined ? undefined : JSON.parse(JSON.stringify(body));
   const check = new Check();
   const properties = SCHEMA.properties!;
+  if (holdsLoneSurrogate(request)) {
+    check.fail('', 'server_error');
+    return check.errors;
+  }
   // FastAPI reads an empty body, and null, as no body
   if (request === undefined || request === null) {
     check.fail('', 'missing');
