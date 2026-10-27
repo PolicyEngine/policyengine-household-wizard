@@ -50,6 +50,10 @@ jobs:
         if: steps.check.outputs.count != '0'
         run: bun run build
 
+      - name: Type-check a consumer of the build
+        if: steps.check.outputs.count != '0'
+        run: bun run check:consumer-types
+
       - name: Set up Node for npm publish
         if: steps.check.outputs.count != '0'
         uses: actions/setup-node@v6

@@ -1,6 +1,6 @@
 # policyengine-household-wizard
 
-Shared wizard primitives and US household draft contract for PolicyEngine apps.
+Shared wizard primitives and US and UK household draft contracts for PolicyEngine apps.
 
 ## Commands
 
@@ -8,6 +8,7 @@ Shared wizard primitives and US household draft contract for PolicyEngine apps.
 - Build: `bun run build`
 - Test: `bun run test`
 - Type check: `bun run typecheck`
+- Type-check an app that uses the build (after `bun run build`): `bun run check:consumer-types`
 - Refresh county data: `bun run regenerate-counties`
 - Refresh the PolicyEngine US variable graph: `bun run regenerate-variable-graph`
 - Check the V1 payload against the live API: `bun run test:live`
@@ -15,7 +16,10 @@ Shared wizard primitives and US household draft contract for PolicyEngine apps.
 ## Architecture
 
 - **Vite library mode** — builds ESM + CJS + types for `index`, `primitives`,
-  `us-household`, and `us-household-adapters` entry points.
+  `us-household`, `us-household-adapters`, `uk-household`, and
+  `uk-household-adapters` entry points. The root `index` exports the
+  primitives and the US model only; the UK model shares its names, so it is
+  imported from its subpath.
 - **No UI shell** — the package exposes primitives (option card, progress,
   navigation, review list, `useWizardSteps`) and a data contract; apps build
   their own form layouts.
@@ -73,5 +77,28 @@ Fragment types and their bump levels live in `.github/bump_version.py`.
   total and that no field sets it. Then run
   `bun run regenerate-variable-graph` so the invariant tests see the new
   variable.
-- New country (e.g. UK) → mirror the structure under
-  `src/uk-household/` rather than mixing into `us-household/`.
+- New UK household field → add to `src/uk-household/types.ts` and update
+  `createBlankDraft`, `createTypicalDraft`, `validate` (with its bound in
+  `UK_HOUSEHOLD_LIMITS`), `serializeDraft`/`deserializeDraft` and
+  `toHouseholdImpactRequest` together. The request must stay byte-identical
+  to what the UK Autumn Budget 2026 dashboard sent: the fixtures in
+  `tests/fixtures/uk/dashboard-households.json` were captured from its code,
+  and `tests/uk-household/reference/dashboardRequest.ts` is a verbatim copy
+  of that code. Never edit the reference to match the package; a new field
+  needs fixtures captured from the dashboard, and an intended difference
+  needs its own test and an entry in `docs/uk-household.md`. When the
+  dashboard's request models change, rerun
+  `tests/fixtures/uk/capture_household_impact_api.py` (its docstring has the
+  command): the API mirror, `reference/householdImpactApi.ts`, reads their
+  schema from the fixture it writes, and `apiMirror.test.ts` checks the
+  mirror against the verdicts of the dashboard's own app, run at that commit
+  in the environment its `uv.lock` pins. It also fails on a pydantic feature
+  the models use that the mirror does not implement (`MIRRORED_FEATURES`),
+  on a changed validator until the mirror copies it, and on a change to any
+  other dashboard code that runs while the API answers, any dashboard file
+  the API loads or opens through Python, or the environment it runs in
+  (the interpreter and its flags, and every package's version and files),
+  until it is read and its hash or version recorded (`REVIEWED_DASHBOARD_CODE`,
+  `REVIEWED_DASHBOARD_FILES`, `REVIEWED_DASHBOARD_ENVIRONMENT`).
+- New country → mirror the structure of `src/us-household/` and
+  `src/uk-household/` rather than mixing into either.
