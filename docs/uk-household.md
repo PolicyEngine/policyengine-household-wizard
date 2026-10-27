@@ -178,8 +178,8 @@ its checks. Before it imports the dashboard, it checks five things:
 - the files are the commit's;
 - the environment sees no site-packages but its own: not those of the
   Python install it was made from, nor the user's;
-- every package installed is the version the lock pins, which the lock
-  takes from PyPI, each copy if one shadows another;
+- every package installed but the dashboard's own is the version the lock
+  pins, which the lock takes from PyPI, each copy if one shadows another;
 - each package has a `RECORD`, apart from the project's egg-info, which
   must be beside the sources the project's install adds to the path, or
   in the export's `src`, where the first check lets one be (its own list

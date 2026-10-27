@@ -54,11 +54,11 @@ export made before, and ``--python`` the interpreter of an environment
 already synced to its lock, so the capture can run without a network.
 Either way, before it imports the dashboard, it checks that the files are
 the commit's, that the environment sees no site-packages but its own, that
-every installed package is the version ``uv.lock`` pins, which the lock
-takes from PyPI, that each file its ``RECORD`` hashes is as the ``RECORD``
-says, and that the packages deciding the verdicts are imported from those
-installs, and that the project's install adds nothing to site-packages but
-its metadata and ``.pth`` file.
+every installed package but the dashboard's own is the version ``uv.lock``
+pins, which the lock takes from PyPI, that each file its ``RECORD`` hashes
+is as the ``RECORD`` says, and that the packages deciding the verdicts are
+imported from those installs, and that the project's install adds nothing
+to site-packages but its metadata and ``.pth`` file.
 It does not check the files against the wheels the lock pins: a package and
 its ``RECORD`` changed together pass, but change the digest the environment
 records. At the end it checks that every module loaded from a file, and
@@ -182,8 +182,9 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
 
     - the environment sees no site-packages but its own: not those of the
       install it was made from, nor the user's;
-    - every package installed here is the version the dashboard's
-      ``uv.lock`` pins at the commit, which the lock takes from PyPI;
+    - every package installed here but the project is the version the
+      dashboard's ``uv.lock`` pins at the commit, which the lock takes from
+      PyPI;
     - every package has a ``RECORD`` but the project's egg-info, which
       must be in a directory the project's install adds to the path, or
       in the export's ``src``;
@@ -217,8 +218,10 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
     assert not site.ENABLE_USER_SITE, f"{sys.prefix} sees the user's site-packages ({site.getusersitepackages()})"
     # Every copy on the path, so one shadowing another is checked too. The
     # project's own (its install, and the egg-info a build leaves beside its
-    # sources) is imported from the source, which check_source checks; its
-    # install names the export's path, so only its entry points are recorded
+    # sources) is the lock's editable entry, not a release from PyPI, so its
+    # version is not compared with the lock; its code is imported from the
+    # export, which check_source checks, and its install names the path of
+    # the export it was made from, so only its entry points are recorded
     installed, contents, entry_points, owned, checked = {}, {}, set(), set(), set()
     # The metadata of each package without a RECORD, and the directories
     # the project's .pth files add to the path
@@ -275,11 +278,12 @@ def check_environment(dashboard: Path, commit: str, source: Path) -> tuple[dict,
                 }
         if name != project:
             contents[name] = hashlib.sha256("\n".join(sorted(listed)).encode()).hexdigest()
-    # The egg-info a build leaves beside the project's sources, which
-    # check_source checks: those the project's .pth files add, or the
-    # export's own, where check_source lets one be (an export synced once,
-    # then run on PYTHONPATH with another venv). Its own list of them is
-    # not used
+    # The egg-info a build leaves beside the project's sources, in one of
+    # two places: a directory the project's .pth files add, or the export's
+    # own src, where check_source lets one be (an export synced once, then
+    # run on PYTHONPATH with another venv). check_source checks only the
+    # export, not the sources a .pth adds; nothing here reads the
+    # egg-info's list of files, so it vouches for none of them
     beside = added | {(source / "src").resolve()}
     for metadata in unrecorded:
         assert metadata.suffix == ".egg-info" and metadata.parent in beside, (
