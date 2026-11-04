@@ -58,7 +58,9 @@ jobs:
         if: steps.check.outputs.count != '0'
         uses: actions/setup-node@v6
         with:
-          node-version: "24.21.0"
+          # Node.js compiles in its CA list. 24.22.1 and later drop the
+          # compromised eMudhra emSign ECC Root CA - G3; 24.21.0 still trusted it.
+          node-version: "24.22.2"
           registry-url: https://registry.npmjs.org
 
       - name: Verify npm publishing toolchain
@@ -66,8 +68,8 @@ jobs:
         run: |
           node --version
           npm --version
-          test "$(node --version)" = "v24.21.0"
-          test "$(npm --version)" = "11.19.0"
+          test "$(node --version)" = "v24.22.2"
+          test "$(npm --version)" = "11.19.1"
 
       - name: Publish to npm
         if: steps.check.outputs.count != '0'

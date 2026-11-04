@@ -46,11 +46,17 @@ two-factor authentication cannot manage trust. See the
 
 ## Publishing toolchain
 
-The workflow pins Node **24.21.0** and checks its bundled npm **11.19.0** before
-publishing. These versions were verified on September 14, 2026 against the
+The workflow pins Node **24.22.2** and checks its bundled npm **11.19.1** before
+publishing. These versions were verified on November 4, 2026 against the
 [official Node distribution index](https://nodejs.org/dist/index.json) and
-[npm's version metadata](https://registry.npmjs.org/npm/11.19.0). They meet npm's
+[npm's version metadata](https://registry.npmjs.org/npm/11.19.1). They meet npm's
 trusted-publishing requirements; a version mismatch stops before publication.
+
+Node.js compiles in its list of trusted certificate authorities, so the pinned
+version decides which certificates `npm publish` accepts. Keep it at 24.22.1 or
+later: earlier Node 24 releases still trust the eMudhra emSign ECC Root CA - G3,
+whose intermediate CA keys were compromised in October 2026
+(<https://emudhra.we-have-a-problem.com>).
 
 After changing the toolchain, recheck both official sources and update the
 version assertions together. Preserve the package's repository URL so npm can
