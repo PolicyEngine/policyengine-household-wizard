@@ -110,6 +110,7 @@ interface LegacyDraftShape {
   partnerAge?: number | string | null;
   spouseAge?: number | string | null;
   year?: number;
+  childcareExpenses?: number | string | null;
 }
 
 function coerceAge(value: unknown): number | null {
@@ -233,6 +234,8 @@ export function normalizeLegacyDraft(
   }
   const legacy = raw as LegacyDraftShape;
   const draft = createBlankDraft(options.year ?? legacy.year ?? DEFAULT_HOUSEHOLD_YEAR);
+  const childcare = coerceNumber(legacy.childcareExpenses);
+  if (childcare !== undefined) draft.childcareExpenses = childcare;
 
   // Location.
   if (typeof legacy.state === 'string' && isUSStateCode(legacy.state)) {

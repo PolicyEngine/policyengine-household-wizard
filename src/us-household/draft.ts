@@ -46,6 +46,7 @@ export function cloneDraft(draft: USHouseholdDraft): USHouseholdDraft {
     zip: draft.zip,
     maritalStatus: draft.maritalStatus,
     year: draft.year,
+    childcareExpenses: draft.childcareExpenses,
     extras: draft.extras ? structuredClone(draft.extras) : undefined,
     people: draft.people.map((person) => ({
       ...person,

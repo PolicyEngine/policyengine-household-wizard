@@ -47,6 +47,21 @@ export function validate(
   const { requireCounty = false, requireAges = true } = options;
   const issues: ValidationIssue[] = [];
 
+  const childcare = toAmount(draft.childcareExpenses);
+  if (draft.childcareExpenses != null && childcare === undefined) {
+    issues.push({
+      code: 'childcareExpenses.invalid',
+      path: 'childcareExpenses',
+      message: 'Childcare expenses must be a finite amount.',
+    });
+  } else if (childcare !== undefined && childcare < 0) {
+    issues.push({
+      code: 'childcareExpenses.negative',
+      path: 'childcareExpenses',
+      message: 'Childcare expenses cannot be negative.',
+    });
+  }
+
   if (!draft.state) {
     issues.push({
       code: 'state.required',

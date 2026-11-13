@@ -1,4 +1,5 @@
 import { createBlankDraft } from './draft';
+import { toAmount } from './amount';
 import type { USHouseholdDraft, USPersonDraft } from './types';
 
 /**
@@ -10,6 +11,7 @@ import type { USHouseholdDraft, USPersonDraft } from './types';
  *                  &p=adult:35:e50000,adult:33:e20000,dep:6`
  *
  * Fields are pipe-separated within each person; people are comma-separated.
+ * `childcare=3000` carries annual household childcare costs, including 0.
  * Only the keys below are written: other person fields, such as tips,
  * investment income and expenses, are dropped from links for now.
  * Income/flag keys are single letters to keep the URL short:
@@ -103,6 +105,8 @@ export function serializeDraft(draft: USHouseholdDraft): string {
   if (draft.zip) params.set('zip', draft.zip);
   if (draft.maritalStatus) params.set('marital', draft.maritalStatus);
   params.set('year', String(draft.year));
+  const childcare = toAmount(draft.childcareExpenses);
+  if (childcare !== undefined) params.set('childcare', String(childcare));
   if (draft.people.length > 0) {
     params.set('p', draft.people.map(serializePerson).join(','));
   }
@@ -112,6 +116,8 @@ export function serializeDraft(draft: USHouseholdDraft): string {
 export function deserializeDraft(query: string | URLSearchParams): USHouseholdDraft {
   const params = typeof query === 'string' ? new URLSearchParams(query) : query;
   const draft = createBlankDraft();
+  const childcare = toAmount(params.get('childcare'));
+  if (childcare !== undefined) draft.childcareExpenses = childcare;
 
   const state = params.get('state');
   if (state) draft.state = state;
