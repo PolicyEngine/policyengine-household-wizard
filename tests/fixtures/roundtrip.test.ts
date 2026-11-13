@@ -8,6 +8,7 @@ import countyCase from './county-case.json' with { type: 'json' };
 import retireeWithSsdi from './retiree-with-ssdi.json' with { type: 'json' };
 import retireeWithPensions from './retiree-with-pensions.json' with { type: 'json' };
 import itemizerWithTips from './itemizer-with-tips.json' with { type: 'json' };
+import childcareExpenses from './childcare-expenses.json' with { type: 'json' };
 
 import { isComplete } from '@/us-household/validate';
 import { normalizeLegacyDraft } from '@/us-household/normalize';
@@ -30,6 +31,7 @@ const FIXTURES: Fixture[] = [
   retireeWithSsdi as Fixture,
   retireeWithPensions as Fixture,
   itemizerWithTips as Fixture,
+  childcareExpenses as Fixture,
 ];
 
 describe('US household fixtures', () => {
@@ -43,6 +45,7 @@ describe('US household fixtures', () => {
     expect(round.county).toBe(draft.county);
     expect(round.maritalStatus).toBe(draft.maritalStatus);
     expect(round.year).toBe(draft.year);
+    expect(round.childcareExpenses).toBe(draft.childcareExpenses);
     expect(round.people).toHaveLength(draft.people.length);
     draft.people.forEach((person, index) => {
       expect(round.people[index]).toMatchObject({
@@ -88,12 +91,14 @@ describe('US household fixtures', () => {
         privatePensionIncome: person.privatePensionIncome,
       })),
       year: draft.year,
+      childcareExpenses: draft.childcareExpenses,
     };
 
     const normalized = normalizeLegacyDraft(legacy);
     expect(normalized.state).toBe(draft.state);
     expect(normalized.maritalStatus).toBe(draft.maritalStatus);
     expect(normalized.county).toBe(draft.county);
+    expect(normalized.childcareExpenses).toBe(draft.childcareExpenses);
     expect(normalized.people).toHaveLength(draft.people.length);
     normalized.people.forEach((person, index) => {
       const expected = draft.people[index];

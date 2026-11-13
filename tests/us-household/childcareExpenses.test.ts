@@ -21,7 +21,11 @@ describe('household childcare expenses', () => {
     });
     expect(Object.values(situation.people).every((person) => !(VARIABLE in person))).toBe(true);
     expect(graph.variables).toHaveProperty(VARIABLE, {
-      entity: 'spm_unit', isInputVariable: true, defaultValue: 0, adds: [], subtracts: [],
+      entity: 'spm_unit',
+      isInputVariable: true,
+      defaultValue: 0,
+      adds: [],
+      subtracts: [],
     });
   });
 
@@ -43,7 +47,13 @@ describe('household childcare expenses', () => {
   it.each([-1, -3000])('rejects a negative amount %s', (value) => {
     expect(validate({ ...draft, childcareExpenses: value })).toMatchObject({
       ok: false,
-      issues: expect.arrayContaining([{ code: 'childcareExpenses.negative', path: 'childcareExpenses', message: expect.any(String) }]),
+      issues: expect.arrayContaining([
+        {
+          code: 'childcareExpenses.negative',
+          path: 'childcareExpenses',
+          message: expect.any(String),
+        },
+      ]),
     });
   });
 
@@ -51,31 +61,49 @@ describe('household childcare expenses', () => {
     const entered = { ...draft, childcareExpenses: value };
     expect(validate(entered)).toMatchObject({
       ok: false,
-      issues: expect.arrayContaining([{ code: 'childcareExpenses.invalid', path: 'childcareExpenses', message: expect.any(String) }]),
+      issues: expect.arrayContaining([
+        {
+          code: 'childcareExpenses.invalid',
+          path: 'childcareExpenses',
+          message: expect.any(String),
+        },
+      ]),
     });
     expect(toV1HouseholdSituation(entered).spm_units?.spm_unit).not.toHaveProperty(VARIABLE);
   });
 
   it('preserves the model input through links without duplicating it or mutating the draft', () => {
-    fc.assert(fc.property(
-      fc.integer({ min: 0, max: 100_000_000 }),
-      fc.integer({ min: 2024, max: 2030 }),
-      fc.integer({ min: 1, max: 5 }),
-      (cents, year, children) => {
-        const entered = { ...draft, year, childcareExpenses: cents / 100,
-          people: [draft.people[0], ...Array.from({ length: children }, (_, index) => ({
-            id: `dependent-${index + 1}`, kind: 'dependent' as const, age: index + 2,
-          }))],
-        };
-        const before = structuredClone(entered);
-        const direct = toV1HouseholdSituation(entered);
-        const round = toV1HouseholdSituation(deserializeDraft(serializeDraft(entered)));
-        expect(Object.values(direct.spm_units ?? {})[0][VARIABLE]).toEqual({ [year]: cents / 100 });
-        expect(Object.values(round.spm_units ?? {})[0][VARIABLE]).toEqual(Object.values(direct.spm_units ?? {})[0][VARIABLE]);
-        expect(Object.values(direct.people).every((person) => !(VARIABLE in person))).toBe(true);
-        expect(entered).toEqual(before);
-        expect(toV1HouseholdSituation(entered)).toEqual(direct);
-      },
-    ));
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 100_000_000 }),
+        fc.integer({ min: 2024, max: 2030 }),
+        fc.integer({ min: 1, max: 5 }),
+        (cents, year, children) => {
+          const entered = {
+            ...draft,
+            year,
+            childcareExpenses: cents / 100,
+            people: [
+              draft.people[0],
+              ...Array.from({ length: children }, (_, index) => ({
+                id: `dependent-${index + 1}`,
+                kind: 'dependent' as const,
+                age: index + 2,
+              })),
+            ],
+          };
+          const before = structuredClone(entered);
+          const direct = toV1HouseholdSituation(entered);
+          const round = toV1HouseholdSituation(deserializeDraft(serializeDraft(entered)));
+          expect(Object.values(direct.spm_units ?? {})[0][VARIABLE]).toEqual({
+            [year]: cents / 100,
+          });
+          expect(round).toEqual(direct);
+          expect(Object.values(direct.people).every((person) => !(VARIABLE in person))).toBe(true);
+          expect(entered).toEqual(before);
+          expect(toV1HouseholdSituation(entered)).toEqual(direct);
+        },
+      ),
+    );
   });
 });

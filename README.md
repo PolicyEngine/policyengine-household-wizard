@@ -74,6 +74,22 @@ See [`docs/api.md`](docs/api.md) for wizard navigation and focus APIs, [`docs/uk
 for the UK household model, and [`docs/migration.md`](docs/migration.md)
 for migrating from each app's local wizard.
 
+## US childcare expenses
+
+Set optional `draft.childcareExpenses` to annual household childcare costs
+before childcare subsidies, in dollars. Apps collect this amount once for
+the household. The V1 adapter sends it once as
+`spm_units.spm_unit.spm_unit_pre_subsidy_childcare_expenses`, keyed by the
+draft's year; PolicyEngine allocates the total among children and subtracts
+childcare subsidies. Do not also supply the computed person-level childcare
+expenses. Credit eligibility depends on the model's employment, age and
+other program rules.
+
+Leave the field unset when the app does not ask about childcare. An entered
+0 stays explicit. `validate()` rejects negative or nonfinite amounts;
+cloning, normalization and shared links preserve entered amounts. The shared
+link parameter is `childcare`, for example `childcare=3000`.
+
 ## Design decisions
 
 - **Marital status, not filing status.** The wizard asks users marital status

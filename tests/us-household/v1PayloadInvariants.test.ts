@@ -306,6 +306,7 @@ const draftArb: fc.Arbitrary<USHouseholdDraft> = fc
       nil: null,
     }),
     year: fc.integer({ min: 2020, max: 2035 }),
+    childcareExpenses: fc.option(fc.integer({ min: 0, max: 1_000_000 }), { nil: undefined }),
     people: fc.array(personArb, { minLength: 1, maxLength: 6 }),
   })
   .map(({ people, ...rest }) => ({
@@ -359,6 +360,12 @@ describe('toV1HouseholdPayload invariants', () => {
             expect(VARIABLES[variable]?.entity, `${variable}: ${REGENERATE_HINT}`).toBe(
               'household',
             );
+          }
+        }
+        for (const record of Object.values(data.spm_units ?? {})) {
+          for (const variable of Object.keys(record).filter((key) => key !== 'members')) {
+            expect(VARIABLES[variable]?.entity, `${variable}: ${REGENERATE_HINT}`).toBe('spm_unit');
+            expect(VARIABLES[variable]?.isInputVariable).toBe(true);
           }
         }
       }),
