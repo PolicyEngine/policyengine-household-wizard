@@ -1,3 +1,10 @@
+## [0.4.0] - 2026-11-13
+
+### Added
+
+- Add optional annual household childcare expenses to the US draft, validation, links, and PolicyEngine household payload.
+
+
 ## [0.3.0] - 2026-10-27
 
 ### Added
