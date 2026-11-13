@@ -231,6 +231,13 @@
       "adds": [],
       "subtracts": []
     },
+    "spm_unit_pre_subsidy_childcare_expenses": {
+      "entity": "spm_unit",
+      "isInputVariable": true,
+      "defaultValue": 0,
+      "adds": [],
+      "subtracts": []
+    },
     "ssi": {
       "entity": "person",
       "isInputVariable": false,

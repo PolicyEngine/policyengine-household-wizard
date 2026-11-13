@@ -1,0 +1,15 @@
+{
+  "name": "Iowa single parent with annual childcare expenses",
+  "draft": {
+    "state": "IA",
+    "county": null,
+    "zip": null,
+    "maritalStatus": "single",
+    "year": 2026,
+    "childcareExpenses": 3000,
+    "people": [
+      { "id": "adult-1", "kind": "adult", "age": 40, "employmentIncome": 114150 },
+      { "id": "dependent-1", "kind": "dependent", "age": 4 }
+    ]
+  }
+}

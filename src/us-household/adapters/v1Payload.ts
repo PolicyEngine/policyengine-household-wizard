@@ -367,6 +367,10 @@ export function toV1HouseholdPayload(
   const spmUnits: V1GroupCollection = {
     [keys.spmUnit]: { members: [...memberIds] },
   };
+  const childcare = toAmount(draft.childcareExpenses);
+  if (childcare !== undefined) {
+    spmUnits[keys.spmUnit].spm_unit_pre_subsidy_childcare_expenses = yearMap(year, childcare);
+  }
   const households: V1GroupCollection = {
     [keys.household]: householdRecord,
   };

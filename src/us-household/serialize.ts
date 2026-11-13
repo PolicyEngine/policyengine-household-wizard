@@ -1,4 +1,5 @@
 import { createBlankDraft } from './draft';
+import { toAmount } from './amount';
 import type { USHouseholdDraft, USPersonDraft } from './types';
 
 /**
@@ -103,6 +104,8 @@ export function serializeDraft(draft: USHouseholdDraft): string {
   if (draft.zip) params.set('zip', draft.zip);
   if (draft.maritalStatus) params.set('marital', draft.maritalStatus);
   params.set('year', String(draft.year));
+  const childcare = toAmount(draft.childcareExpenses);
+  if (childcare !== undefined) params.set('childcare', String(childcare));
   if (draft.people.length > 0) {
     params.set('p', draft.people.map(serializePerson).join(','));
   }
@@ -112,6 +115,8 @@ export function serializeDraft(draft: USHouseholdDraft): string {
 export function deserializeDraft(query: string | URLSearchParams): USHouseholdDraft {
   const params = typeof query === 'string' ? new URLSearchParams(query) : query;
   const draft = createBlankDraft();
+  const childcare = toAmount(params.get('childcare'));
+  if (childcare !== undefined) draft.childcareExpenses = childcare;
 
   const state = params.get('state');
   if (state) draft.state = state;

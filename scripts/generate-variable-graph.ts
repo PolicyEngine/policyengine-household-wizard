@@ -45,6 +45,8 @@ const OTHER_PERSON_VARIABLES = [
 export const GUARDED_TOTALS = ['mortgage_interest'];
 /** Household variables the adapter sets. */
 const HOUSEHOLD_VARIABLES = ['state_name', 'county'];
+/** SPM-unit inputs set once for the shared household. */
+const SPM_UNIT_VARIABLES = ['spm_unit_pre_subsidy_childcare_expenses'];
 
 type Components = string[] | string | null | undefined;
 
@@ -170,6 +172,7 @@ async function main() {
     ...(Object.values(INCOME_ALSO_ADDED_TO) as string[]),
     ...Object.values(EXPENSE_TO_VARIABLE),
     ...HOUSEHOLD_VARIABLES,
+    ...SPM_UNIT_VARIABLES,
     ...GUARDED_TOTALS,
   ];
   const graph = buildVariableGraph(payload.result, roots);

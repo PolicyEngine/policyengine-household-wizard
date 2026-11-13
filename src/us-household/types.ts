@@ -202,6 +202,14 @@ export interface USHouseholdDraft {
    * differentiates them. Order is significant for UI labels ("Adult 1", etc.).
    */
   people: USPersonDraft[];
+  /**
+   * Annual household childcare costs before childcare subsidies, in dollars.
+   * The V1 adapter sends this total once as the SPM-unit input
+   * `spm_unit_pre_subsidy_childcare_expenses`; the model allocates costs among
+   * children and subtracts subsidies. Do not repeat the total for each child.
+   * Leave unset when the app does not ask about childcare costs.
+   */
+  childcareExpenses?: number;
   /** Year the household is being modeled for. */
   year: number;
   /** App-controlled household-level fields ignored by the shared adapters. */
