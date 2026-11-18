@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Test the US sample generator
+        run: uv run --no-project --python 3.12 --with 'h5py==3.16.0' python -B -m unittest discover -s tests/us-household -p 'test_generate_us_samples.py'
+
       - name: Type check
         run: bun run typecheck
 

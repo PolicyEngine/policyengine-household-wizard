@@ -93,8 +93,9 @@ An explicit redraw skips all copies of the previous profile in its state
 when another profile is available. The slot ID is local to the catalog release.
 
 The draft carries source-year amounts and the sampled state. Each person's
-tax-dependent role and wages stay with that person. ZIP, county, and program
-participation are unspecified. `example.provenance` identifies the dataset,
+tax-dependent role, wages, self-employment income, Social Security retirement
+benefits, and taxable private pension stay with that person. ZIP, county,
+and program participation are unspecified. `example.provenance` identifies the dataset,
 build, source year, and source link. Apps that model another policy year
 should show both years. For repeatable draws, pass `random: () => number`
 returning a value in `[0, 1)`.
