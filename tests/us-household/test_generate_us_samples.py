@@ -78,8 +78,12 @@ class SampleCatalogTest(unittest.TestCase):
                         [member(), {**child, column: 2}], b"HEAD_OF_HOUSEHOLD"
                     )
                 )
-        self.assertIsNone(generator.project([member(), {**child, "age": 24}], b"HEAD_OF_HOUSEHOLD"))
-        self.assertIsNotNone(generator.project([member(), {**child, "age": 23}], b"HEAD_OF_HOUSEHOLD"))
+        self.assertIsNone(
+            generator.project([member(), {**child, "age": 24}], b"HEAD_OF_HOUSEHOLD")
+        )
+        self.assertIsNotNone(
+            generator.project([member(), {**child, "age": 23}], b"HEAD_OF_HOUSEHOLD")
+        )
         for filing in [b"SINGLE", b"SURVIVING_SPOUSE", b"SEPARATE"]:
             self.assertIsNone(generator.project([member(), child], filing))
         for invalid in [
