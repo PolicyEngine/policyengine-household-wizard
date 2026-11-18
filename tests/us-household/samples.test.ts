@@ -22,7 +22,7 @@ describe('US sample households', () => {
         expect(sample.draft.people.map(({ id, ...fields }) => fields)).toEqual(profile.people);
         const personIds = sample.draft.people.map(({ id }) => id);
         expect(new Set(personIds).size).toBe(personIds.length);
-        expect(us.validate(sample.draft).ok).toBe(true);
+        expect(us.validate(sample.draft).issues, sample.id).toEqual([]);
       });
     }
   });

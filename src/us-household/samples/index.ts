@@ -21,6 +21,10 @@ export interface UsSampleHousehold {
     buildId: string;
     year: number;
     url: string;
+    sha256: string;
+    policyengineVersion: string;
+    drawsPerState: number;
+    seed: number;
   };
 }
 
@@ -93,13 +97,12 @@ export function drawUsSampleHousehold({
   for (const person of selected.profile.people) {
     people.push(createPerson(person.kind, people, person));
   }
-  const { dataset, buildId, year, url } = catalog.provenance;
   return {
     id: selected.id,
     stateCode: selected.stateCode,
-    provenance: { dataset, buildId, year, url },
+    provenance: { ...catalog.provenance },
     draft: {
-      year, state: selected.stateCode, county: null, zip: null,
+      year: catalog.provenance.year, state: selected.stateCode, county: null, zip: null,
       maritalStatus: selected.profile.maritalStatus, people,
     },
   };
