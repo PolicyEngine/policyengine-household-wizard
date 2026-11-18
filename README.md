@@ -74,6 +74,31 @@ See [`docs/api.md`](docs/api.md) for wizard navigation and focus APIs, [`docs/uk
 for the UK household model, and [`docs/migration.md`](docs/migration.md)
 for migrating from each app's local wizard.
 
+## Start with a US sample household
+
+Load the sample catalog when someone asks for an example. The returned draft
+can be edited with the same inputs as a household the user entered.
+
+```ts
+const { drawUsSampleHousehold } = await import('policyengine-household-wizard/us-household/samples');
+const example = drawUsSampleHousehold({ stateCode: 'VA' });
+const another = drawUsSampleHousehold({ stateCode: 'VA', excludeId: example.id });
+```
+
+The catalog contains Microcosm profiles whose household structure the wizard
+can represent. Omitting
+`stateCode` draws across states in proportion to their eligible household
+weight. Each state's catalog slots were sampled using household weights.
+An explicit redraw skips all copies of the previous profile in its state
+when another profile is available. The slot ID is local to the catalog release.
+
+The draft carries source-year amounts and the sampled state. Each person's
+tax-dependent role and wages stay with that person. ZIP, county, and program
+participation are unspecified. `example.provenance` identifies the dataset,
+build, source year, and source link. Apps that model another policy year
+should show both years. For repeatable draws, pass `random: () => number`
+returning a value in `[0, 1)`.
+
 ## US childcare expenses
 
 Set optional `draft.childcareExpenses` to annual household childcare costs

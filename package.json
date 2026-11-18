@@ -27,6 +27,11 @@
       "import": "./dist/us-household-adapters.js",
       "require": "./dist/us-household-adapters.cjs"
     },
+    "./us-household/samples": {
+      "types": "./dist/us-household/samples/index.d.ts",
+      "import": "./dist/us-household-samples.js",
+      "require": "./dist/us-household-samples.cjs"
+    },
     "./uk-household": {
       "types": "./dist/uk-household/index.d.ts",
       "import": "./dist/uk-household.js",

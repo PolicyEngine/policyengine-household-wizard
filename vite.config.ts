@@ -16,6 +16,7 @@ export default defineConfig({
         primitives: resolve(__dirname, 'src/primitives/index.ts'),
         'us-household': resolve(__dirname, 'src/us-household/index.ts'),
         'us-household-adapters': resolve(__dirname, 'src/us-household/adapters/index.ts'),
+        'us-household-samples': resolve(__dirname, 'src/us-household/samples/index.ts'),
         'uk-household': resolve(__dirname, 'src/uk-household/index.ts'),
         'uk-household-adapters': resolve(__dirname, 'src/uk-household/adapters/index.ts'),
       },

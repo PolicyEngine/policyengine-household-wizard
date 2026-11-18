@@ -24,6 +24,7 @@ import { createBlankDraft } from 'policyengine-household-wizard';
 import { WizardProgress } from 'policyengine-household-wizard/primitives';
 import { createBlankDraft as createBlankUSDraft } from 'policyengine-household-wizard/us-household';
 import { toV1HouseholdPayload } from 'policyengine-household-wizard/us-household/adapters';
+import { drawUsSampleHousehold } from 'policyengine-household-wizard/us-household/samples';
 import {
   createTypicalDraft,
   deserializeDraft,
@@ -39,7 +40,8 @@ const draft: UKHouseholdDraft = deserializeDraft(serializeDraft(createTypicalDra
 const result: boolean = validate(draft, { year: 2027 }).ok;
 const body: HouseholdImpactRequest = toHouseholdImpactRequest(draft, { year: 2027, policies: ['road_fuel_vat_cut'] });
 const same: HouseholdImpactRequest = toRequest(draft, { year: 2027, policies: ['road_fuel_vat_cut'] });
-export const used = [createBlankDraft, WizardProgress, createBlankUSDraft, toV1HouseholdPayload, result, body, same];
+const sample = drawUsSampleHousehold({ stateCode: 'PA', random: () => 0.5 });
+export const used = [createBlankDraft, WizardProgress, createBlankUSDraft, toV1HouseholdPayload, sample.draft, result, body, same];
 `;
 
 const RESOLUTIONS = [
