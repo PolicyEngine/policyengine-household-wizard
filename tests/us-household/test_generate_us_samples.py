@@ -29,6 +29,8 @@ def member(role=b"HEAD", age=30, wages=40_000, marital=1):
         "person_marital_unit_id": marital,
         "tax_unit_role_input": role,
         "age": age,
+        "is_full_time_college_student": 0,
+        "is_disabled": 0,
         "employment_income_before_lsr": wages,
         "self_employment_income_before_lsr": 0,
         "social_security_retirement": 0,
@@ -45,6 +47,8 @@ class SampleCatalogTest(unittest.TestCase):
             self_employment_income_before_lsr=-11.2, taxable_private_pension_income=25.7
         )
         dependent["social_security_retirement"] = 21
+        spouse["is_disabled"] = 1
+        dependent["is_full_time_college_student"] = 1
         result = generator.project([dependent, spouse, head], b"JOINT")
         self.assertEqual(
             result,
@@ -58,10 +62,16 @@ class SampleCatalogTest(unittest.TestCase):
                         "selfEmploymentIncome": -11,
                         "privatePensionIncome": 26,
                     },
-                    {"kind": "adult", "age": 42, "employmentIncome": 14_202},
+                    {
+                        "kind": "adult",
+                        "age": 42,
+                        "employmentIncome": 14_202,
+                        "isDisabled": True,
+                    },
                     {
                         "kind": "dependent",
                         "age": 19,
+                        "isFullTimeStudent": True,
                         "employmentIncome": 504,
                         "socialSecurityIncome": 21,
                     },
@@ -71,6 +81,8 @@ class SampleCatalogTest(unittest.TestCase):
 
     def test_only_unambiguous_memberships_and_supported_values_are_projected(self):
         child = member(b"DEPENDENT", age=7, marital=2)
+        with self.assertRaisesRegex(ValueError, "is_disabled"):
+            generator.project([{**member(), "is_disabled": 2}], b"SINGLE")
         for column in ("person_tax_unit_id", "person_spm_unit_id", "person_family_id"):
             with self.subTest(column=column):
                 self.assertIsNone(
@@ -166,6 +178,11 @@ class SampleCatalogTest(unittest.TestCase):
                 result = generator.build(source)
                 self.assertEqual(result, generator.build(source))
         states = result["states"]
+        source = result["provenance"]
+        self.assertEqual(source["sourceHouseholds"], 4)
+        self.assertEqual(source["eligibleHouseholds"], 3)
+        self.assertEqual(source["totalWeight"], 116.25)
+        self.assertEqual(source["eligibleWeight"], 16.25)
         self.assertEqual(states["VA"]["populationWeight"], 6.0)
         self.assertEqual(states["DC"]["populationWeight"], 10.25)
         self.assertEqual(len(states["DC"]["households"]), generator.SLOTS)

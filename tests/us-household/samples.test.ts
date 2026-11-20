@@ -2,9 +2,21 @@ import { describe, expect, it } from 'vitest';
 import * as root from '../../src';
 import * as us from '../../src/us-household';
 import catalog from '../../src/us-household/samples/catalog.json';
-import { drawUsSampleHousehold } from '../../src/us-household/samples';
+import { drawUsSampleHousehold, getUsSampleHousehold } from '../../src/us-household/samples';
+import { toV1HouseholdSituation } from '../../src/us-household/adapters/v1Payload';
 
 describe('US sample households', () => {
+  it('retains a sampled dependent’s student and disability status in a V1 calculation', () => {
+    // The pinned source has both flags for the 21-year-old dependent in NJ slot 15.
+    const sample = drawUsSampleHousehold({ stateCode: 'NJ', random: () => 15.5 / 32 });
+    const dependent = sample.draft.people[2];
+    expect(dependent).toMatchObject({ kind: 'dependent', age: 21, isFullTimeStudent: true, isDisabled: true });
+    expect(toV1HouseholdSituation(sample.draft).people[dependent.id]).toMatchObject({
+      is_full_time_college_student: { 2024: true },
+      is_disabled: { 2024: true },
+    });
+  });
+
   it('returns every state slot as a valid independent wizard draft, preserving the source fields', () => {
     for (const [stateCode, { households }] of Object.entries(catalog.states)) {
       households.forEach((profile, index) => {
@@ -13,6 +25,7 @@ describe('US sample households', () => {
         });
         expect(sample.id).toBe(`${stateCode}-${index}`);
         expect(sample.stateCode).toBe(stateCode);
+        expect(getUsSampleHousehold(sample.id)).toEqual(sample);
         expect(sample.draft).toMatchObject({
           state: stateCode,
           maritalStatus: profile.maritalStatus,
@@ -61,8 +74,21 @@ describe('US sample households', () => {
     }
   });
 
+  it('looks up a fresh draft without changing the catalog or inventing unknown slots', () => {
+    const drawn = drawUsSampleHousehold({ stateCode: 'NJ', random: () => 15.5 / 32 });
+    const reopened = getUsSampleHousehold(drawn.id)!;
+    reopened.draft.people[2].isDisabled = false;
+    reopened.provenance.year = 1900;
+    expect(getUsSampleHousehold(drawn.id)).toEqual(drawn);
+    for (const unknown of ['', 'nj-15', 'XX-0', 'NJ-32', 'NJ-15x']) {
+      expect(getUsSampleHousehold(unknown)).toBeUndefined();
+    }
+  });
+
   it('keeps the sample catalog behind its own import path', () => {
     expect(root).not.toHaveProperty('drawUsSampleHousehold');
     expect(us).not.toHaveProperty('drawUsSampleHousehold');
+    expect(root).not.toHaveProperty('getUsSampleHousehold');
+    expect(us).not.toHaveProperty('getUsSampleHousehold');
   });
 });

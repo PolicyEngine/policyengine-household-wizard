@@ -1,1 +1,1 @@
-Add an optional US household sampler that starts an editable draft from a weighted catalog of Microcosm households.
+Add an optional US household sampler that draws editable examples from PolicyEngine's calibrated synthetic population, `populace_us_2024`.

@@ -76,26 +76,28 @@ for migrating from each app's local wizard.
 
 ## Start with a US sample household
 
-Load the sample catalog when someone asks for an example. The returned draft
-can be edited with the same inputs as a household the user entered.
+Load the sample catalog when someone asks for an example. Users can edit
+the example with the same controls they use to enter their own household.
 
 ```ts
-const { drawUsSampleHousehold } = await import('policyengine-household-wizard/us-household/samples');
+const { drawUsSampleHousehold, getUsSampleHousehold } = await import('policyengine-household-wizard/us-household/samples');
 const example = drawUsSampleHousehold({ stateCode: 'VA' });
 const another = drawUsSampleHousehold({ stateCode: 'VA', excludeId: example.id });
+const reopened = getUsSampleHousehold(example.id);
 ```
 
-The catalog contains Microcosm profiles whose household structure the wizard
-can represent. Omitting
-`stateCode` draws across states in proportion to their eligible household
-weight. Each state's catalog slots were sampled using household weights.
+The generator draws profiles from PolicyEngine's calibrated synthetic US
+population, `populace_us_2024`, in proportion to eligible household weights
+within each state. Omit `stateCode` to draw across states in proportion
+to their eligible household weights.
 An explicit redraw skips all copies of the previous profile in its state
-when another profile is available. The slot ID is local to the catalog release.
+when another profile is available. Use a slot ID only with the catalog release that produced it.
 
 The draft carries source-year amounts and the sampled state. Each person's
-tax-dependent role, wages, self-employment income, Social Security retirement
-benefits, and taxable private pension stay with that person. ZIP, county,
-and program participation are unspecified. `example.provenance` identifies the dataset,
+tax-dependent role, disability and full-time college student flags, wages,
+self-employment income, Social Security retirement benefits and taxable
+private pension stay with that person. The draft leaves ZIP, county and
+program participation unset. `example.provenance` identifies the dataset,
 build, source year, and source link. See [the catalog methods](docs/us-sample-households.md)
 for its inputs and coverage. Apps that model another policy year
 should show both years. For repeatable draws, pass `random: () => number`

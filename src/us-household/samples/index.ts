@@ -5,7 +5,7 @@ import catalog from './catalog.json';
 export interface DrawUsSampleHouseholdOptions {
   /** Omit to draw across states. State codes use two uppercase letters. */
   stateCode?: string;
-  /** Exclude the previous sample's state and household profile if another is available. */
+  /** Skip copies of the previous profile in its state when another profile is available. */
   excludeId?: string;
   /** Returns a number from zero inclusive to one exclusive. */
   random?: () => number;
@@ -23,6 +23,11 @@ export interface UsSampleHousehold {
     url: string;
     sha256: string;
     policyengineVersion: string;
+    policyengineUsVersion: string;
+    sourceHouseholds: number;
+    eligibleHouseholds: number;
+    totalWeight: number;
+    eligibleWeight: number;
     drawsPerState: number;
     seed: number;
   };
@@ -32,7 +37,8 @@ interface SampleProfile {
   maritalStatus: USMaritalStatus;
   people: Pick<
     USPersonDraft,
-    'kind' | 'age' | 'employmentIncome' | 'selfEmploymentIncome' | 'socialSecurityIncome' | 'privatePensionIncome'
+    'kind' | 'age' | 'isFullTimeStudent' | 'isDisabled' | 'employmentIncome' |
+    'selfEmploymentIncome' | 'socialSecurityIncome' | 'privatePensionIncome'
   >[];
 }
 
@@ -65,7 +71,7 @@ const slots = Object.entries(states).flatMap(([stateCode, state]) =>
 );
 
 /**
- * Draw an editable projection of a Microcosm household in the source year.
+ * Draw an editable household from the calibrated populace_us_2024 dataset in its source year.
  * ZIP, county and other facts outside the projection stay unset.
  */
 export function drawUsSampleHousehold({
@@ -92,7 +98,16 @@ export function drawUsSampleHousehold({
     remaining -= slot.weight;
     return remaining < 0;
   }) ?? pool[pool.length - 1]; // rounding at the upper end of the last slot
+  return sampleFromSlot(selected);
+}
 
+/** Reopen a sample from this catalog release, or return undefined for an unknown ID. */
+export function getUsSampleHousehold(id: string): UsSampleHousehold | undefined {
+  const selected = slots.find((slot) => slot.id === id);
+  return selected && sampleFromSlot(selected);
+}
+
+function sampleFromSlot(selected: (typeof slots)[number]): UsSampleHousehold {
   const people: USPersonDraft[] = [];
   for (const person of selected.profile.people) {
     people.push(createPerson(person.kind, people, person));

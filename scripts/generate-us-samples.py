@@ -21,7 +21,10 @@ import h5py
 BUILD = "populace-us-2024-spm-20260915"
 REVISION = "0ff35303e4e5c10bf1cfb2da8f65c83d7dfa9ab3"
 SHA256 = "6496cc4393d4d3c6574f76eca231de5898c803b9067645591fd5c4d3e65aee84"
-SOURCE = f"https://huggingface.co/datasets/policyengine/populace-us/blob/{REVISION}/README.md"
+SOURCE = (
+    f"https://huggingface.co/datasets/policyengine/populace-us/blob/{REVISION}"
+    f"/releases/microcosm-us-2024-national/{BUILD}/populace_us_2024.h5"
+)
 YEAR = 2024
 SLOTS = 32
 SEED = 20261118
@@ -88,6 +91,10 @@ INCOMES = {
     "socialSecurityIncome": "social_security_retirement",
     "privatePensionIncome": "taxable_private_pension_income",
 }
+FLAGS = {
+    "isFullTimeStudent": "is_full_time_college_student",
+    "isDisabled": "is_disabled",
+}
 ROLE_ORDER = {b"HEAD": 0, b"SPOUSE": 1, b"DEPENDENT": 2}
 
 
@@ -119,6 +126,12 @@ def project(members, filing):
         if not age.is_integer() or not minimum_age <= age <= maximum_age:
             return None
         person = {"kind": "adult" if adult else "dependent", "age": int(age)}
+        for field, column in FLAGS.items():
+            value = p[column]
+            if value not in (0, 1):
+                raise ValueError(f"Invalid binary value in {column}")
+            if value:
+                person[field] = True
         for field, column in INCOMES.items():
             value = float(p[column])
             if not math.isfinite(value) or (field == "employmentIncome" and value < 0):
@@ -145,6 +158,7 @@ def build(path):
             "person_spm_unit_id",
             "tax_unit_role_input",
             "age",
+            *FLAGS.values(),
             *INCOMES.values(),
         ]
         memberships = defaultdict(list)
@@ -186,6 +200,15 @@ def build(path):
             "url": SOURCE,
             "sha256": SHA256,
             "policyengineVersion": "6.20.2",
+            "policyengineUsVersion": "2.2.2",
+            "sourceHouseholds": sum(
+                float(weight) > 0 for weight in households["household_weight"]
+            ),
+            "eligibleHouseholds": sum(len(entries) for entries in eligible.values()),
+            "totalWeight": math.fsum(households["household_weight"]),
+            "eligibleWeight": math.fsum(
+                state["populationWeight"] for state in states.values()
+            ),
             "drawsPerState": SLOTS,
             "seed": SEED,
         },
